@@ -135,3 +135,30 @@ input,textarea,select{font:inherit;color:inherit}
 .pairs button{padding:12px 8px;border-radius:14px;background:#fff;border:1.5px solid var(--line2);font-weight:700;color:var(--ink-dd)}
 .trophy{display:inline-flex;align-items:center;justify-content:center;width:110px;height:110px;border-radius:34px;background:var(--goldgrad);font-size:62px;box-shadow:0 16px 36px rgba(226,190,90,.45)}
 select.typebox{appearance:auto}
+/* b14: Farsi always right-to-left on its own line under the English */
+.fa{display:block}
+span.fa{display:block}
+.eyfa{font-size:12px;color:var(--dim);margin-top:1px;font-weight:600}
+.prompt .fa,.opt .fa,.btn .fa,.feedback .fa{text-align:center}
+.feedback .fa{margin-top:2px}
+.stat .fa{display:block;text-align:center}
+.stat span.xs{display:block}
+.stat b small{font-size:13px;color:var(--dim);font-weight:700}
+/* header sits below Safari's bar and the status bar; the streak badge never covers the greeting */
+#app{padding-top:calc(26px + var(--sat))}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.topbar+.h1{margin-top:6px;overflow-wrap:anywhere}
+/* road: levels with every lesson */
+.lvhead{display:block;width:100%;text-align:left}
+.lessons{margin-top:12px;border-top:1px solid var(--line);padding-top:6px}
+.lsn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px 2px;border-bottom:1px solid var(--line)}
+.lsn:last-child{border-bottom:0}
+.lsn .n{flex:none;min-width:34px;height:26px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:var(--lc);background:color-mix(in srgb,var(--lc) 12%,white)}
+.lsn .t{display:block;font-size:14px;font-weight:650;color:var(--ink-dd)}
+.lsn.d .t{color:var(--dim)}
+.lsn.d .n{background:var(--gold-bg);color:var(--gold)}
+.lsn.now{background:var(--ink-d);border-radius:12px;padding-left:8px;padding-right:8px}
+details summary{cursor:pointer;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:" ▸"}
+details[open] summary::after{content:" ▾"}

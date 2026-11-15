@@ -6,7 +6,7 @@ home screen from Safari. Built on the model of the Dutch app (`abolfazlfarsad71/
 
 **Open:** https://abolfazlfarsad71.github.io/English-Language-App/
 
-## What is inside (build b13)
+## What is inside (build b14)
 - **Road to C2:** 297 topic units (A1 28 · A2 40 · B1 63 · B2 90 · C1 56 · C2 20), split into 8-word lessons; idiom units alternate with topic units.
 - **5,680 words and phrases** (about 920 idioms) with Farsi meaning, English synonyms, a practical example sentence + Farsi translation, and an
   emoji only where it shows exactly the word (others get a clean letter tile). New-word card floats in 3-D.
@@ -18,7 +18,12 @@ home screen from Safari. Built on the model of the Dutch app (`abolfazlfarsad71/
   cloze practice → the unit dialogue heard blind when a unit is finished. Wrong answers come back 3 cards later and
   stay in "your mistakes" until answered right in two later sessions.
 - Exercise types: meaning (EN→FA), FA→EN, listen-and-choose, fill the gap, typing, synonyms.
-- Speech: the phone's own English voices (British or American, speed control). No outside services.
+- **Recorded American voices** (b14): every word, example, dialogue line, grammar sentence, listening text and sound pair
+  (13,750 phrases) recorded with 6 Piper neural voices: women Emma (lessac), Amy (amy), Hannah (hfc_female); men Ryan (ryan),
+  Joe (joe), Henry (hfc_male), all `en_US-*-medium`. Dialogues use a woman's or man's voice per speaker. The phone voice is
+  only a fallback (iOS 27 Safari no longer starts web speech reliably).
+- **Daily pace:** 30 new words a day until the end of B1, then 20 a day to the end of C2, in sessions of up to 10 new words.
+- **Road is the first tab:** A1→C2 with every lesson, lessons done / total and words learned / total.
 
 ### Removed duplication compared with the Dutch app
 One dialogue per unit (the Dutch app had lesson dialogues, unit conversations and role-plays covering the same
@@ -43,12 +48,25 @@ Never renumber word ids (`u03-5`) or unit/grammar ids: they are keys in saved pr
 - `build.mjs` — builds `index.html` and checks the data (`node build.mjs`).
 - `sw.js`, `manifest.webmanifest`, `icon.svg`, `icon-180.png`, `icon-512.png`.
 
+## Audio (audio/)
+- `keys.json` = every spoken text, normalised (trimmed, whitespace collapsed, lower-case), in a fixed order.
+- `<voice>.json` = `{bps: 3000, files, c: [file, startMs, endMs, …]}` aligned with keys (`-1` = not recorded).
+- `<voice>-<n>.mp3` = CBR 24 kbps MPEG-2 Layer III, 22.05 kHz mono, no ID3/Xing header, clips in 300 ms of silence,
+  so a clip is fetched as a byte range: byte = ms / 1000 × 3000 (times already include the 50 ms encoder delay).
+- Made outside the repo in `../02. Audio`: `export.cjs` (texts) → `run-all.sh` / `synth.cjs` (piper 2023.11.14-2 Windows,
+  length_scale 1.08; newer voice configs need their multi-character phoneme keys removed) → `bundle.cjs <model> <id>`.
+  When texts change, re-export, record only what is new (finished clips are skipped) and re-bundle all six voices.
+
 ## Content sources
 All texts, dialogues and exercises are original, written for this app. The reference books in the owner's folder
 (Vocabulary in Use, Idioms in Use, 4000 Essential Words…) guided the topic and level choice; their text and audio are
 copyrighted and are **not** copied into this public repository.
 
 ## Change log
+- **b14 (16 nov)** — recorded American voices (3 women, 3 men) replace the phone voice; Farsi always right-to-left on its
+  own line under the English (no more mixed English · Farsi rows); Road is the first tab with every lesson listed and
+  lessons/words done out of total; daily pace 30 new words to the end of B1, then 20; greeting no longer hidden under
+  Safari's bar or the streak badge; spoken grammar answers no longer lose every letter "s".
 - **b13 (15 nov)** — corrections from an independent hand-read of all 292 units, grammar and listening (each verified before
   applying); own pass over all 3,849 synonym fields (only true synonyms kept); 60 basic words moved from B2/C1 into five new
   A1–B1 units; 4 grammar lessons added (mine/yours, myself, question tags, so/neither do I); g47 moved to A2; listening

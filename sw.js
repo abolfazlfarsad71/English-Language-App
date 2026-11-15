@@ -9,6 +9,7 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
+  if (/\/audio\/[^/]+\.mp3$/.test(new URL(req.url).pathname)) return;   // recordings: small byte ranges straight from the network
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const key = req.url.split('?')[0];

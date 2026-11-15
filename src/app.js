@@ -1,6 +1,6 @@
 'use strict';
 /* English for Persian speakers — A1 → C2. One-file web app (built by build.mjs). */
-const BUILD = '15 nov · b13';
+const BUILD = '16 nov · b14';
 const DAY = 864e5;
 
 /* ------------------------------ data ------------------------------ */
@@ -30,7 +30,7 @@ const PKEY = 'en.profiles';
 let PROFILES = S.get(PKEY, []);
 let ME = null, ST = null;
 function FRESH() {
-  return { v: 1, cards: {}, gram: {}, dlg: {}, lis: {}, miss: {}, days: {}, streak: { last: '', n: 0, best: 0 }, xp: 0, perDay: 8, accent: 'GB', rate: 1, showFa: true, created: Date.now() };
+  return { v: 1, cards: {}, gram: {}, dlg: {}, lis: {}, miss: {}, days: {}, streak: { last: '', n: 0, best: 0 }, xp: 0, perDay: 30, voice: 'f1', rate: 1, showFa: true, created: Date.now() };
 }
 function loadState(id) {
   const st = S.get('en.' + id + '.state', null);
@@ -71,67 +71,163 @@ function pic(w, big) {
   return big ? `<div class="stage"><div class="pic3d tile"><span>${L}</span></div></div>` : `<span class="mini tile">${L}</span>`;
 }
 const lvChip = lv => `<span class="lvchip lv-${lv}">${lv}</span>`;
-const POS = { n: 'noun · اسم', v: 'verb · فعل', adj: 'adjective · صفت', adv: 'adverb · قید', prep: 'preposition · حرف اضافه', conj: 'conjunction · حرف ربط', phr: 'phrase · عبارت', num: 'number · عدد', idiom: 'idiom · اصطلاح', det: 'determiner · تعیین‌کننده', pron: 'pronoun · ضمیر' };
+const POS = { n: ['noun', 'اسم'], v: ['verb', 'فعل'], adj: ['adjective', 'صفت'], adv: ['adverb', 'قید'], prep: ['preposition', 'حرف اضافه'], conj: ['conjunction', 'حرف ربط'], phr: ['phrase', 'عبارت'], num: ['number', 'عدد'], idiom: ['idiom', 'اصطلاح'], det: ['determiner', 'تعیین‌کننده'], pron: ['pronoun', 'ضمیر'] };
+// English on top, Farsi underneath (never side by side on one line)
+const posTag = p => POS[p] ? `<div class="xs">${POS[p][0]}</div><div class="xs fa">${POS[p][1]}</div>` : '';
+const lab = (en, fa, style) => `<div class="eyebrow"${style ? ` style="${style}"` : ''}>${en}</div><div class="fa eyfa">${fa}</div>`;
 
 /* ------------------------------ speech ------------------------------ */
-// Phone voices (offline, free). Lessons learned on iOS: start speech synchronously inside the tap,
-// request a playback audio session (so the silent switch does not mute it), resolve the voice fresh
-// every time, and retry once with the default voice if a named voice fails.
+// Recorded American voices (Piper neural voices, made once and shipped with the app in audio/), 3 women and 3 men.
+// iOS 27 Safari no longer starts web speech reliably, so the recordings are the main source and the phone
+// voice is only a fallback. Each clip is fetched as its own small byte range of a CBR MP3 bundle and played
+// as a blob on one <audio> element that a silent clip unlocks on the first tap (same method as the Dutch app).
+const VOICE_LIST = [['f1', 'Emma', 'f'], ['f2', 'Amy', 'f'], ['f3', 'Hannah', 'f'], ['m1', 'Ryan', 'm'], ['m2', 'Joe', 'm'], ['m3', 'Henry', 'm']];
+const AUDIO_BASE = 'audio/';
+const anorm = t => String(t).trim().replace(/\s+/g, ' ').toLowerCase();
+let AKEYS = null, AKEY_STATE = '', KEYS_P = null, AUDIO_ERR = '', AUDIO_LAST = '';
+const AVOICE = {};
+function loadKeys() {
+  if (KEYS_P) return KEYS_P;
+  AKEY_STATE = 'loading';
+  KEYS_P = fetch(AUDIO_BASE + 'keys.json?b=' + encodeURIComponent(BUILD)).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(j => { const m = new Map(); j.forEach((k, i) => m.set(k, i)); AKEYS = m; AKEY_STATE = 'ready'; if (TAB === 'you' && !sess) render(); })
+    .catch(e => { AKEY_STATE = 'failed: ' + e.message; AUDIO_ERR = 'index: ' + e.message; logErr('audio ' + AUDIO_ERR); KEYS_P = null; throw e; });
+  KEYS_P.catch(() => { });
+  return KEYS_P;
+}
+function loadVoice(v) {
+  if (AVOICE[v]) return AVOICE[v].p;
+  const o = AVOICE[v] = { d: null };
+  o.p = fetch(AUDIO_BASE + v + '.json?b=' + encodeURIComponent(BUILD)).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(d => { o.d = d; if (TAB === 'you' && !sess) render(); })
+    .catch(e => { delete AVOICE[v]; AUDIO_ERR = 'voice ' + v + ': ' + e.message; logErr('audio ' + AUDIO_ERR); throw e; });
+  o.p.catch(() => { });
+  return o.p;
+}
+const mainVoice = () => (ST && VOICE_LIST.some(x => x[0] === ST.voice)) ? ST.voice : 'f1';
+const voiceName = v => (VOICE_LIST.find(x => x[0] === v) || VOICE_LIST[0])[1];
+function genderVoice(male, not) {   // the learner's own voice when it has the right gender, else the first other voice of that gender
+  const g = male ? 'm' : 'f', m = mainVoice();
+  const list = VOICE_LIST.filter(x => x[2] === g).map(x => x[0]);
+  const order = m[0] === g ? [m, ...list.filter(x => x !== m)] : list;
+  return order.find(x => x !== not) || order[0];
+}
+function clipOf(text, v) {   // → [file, startMs, endMs, bytesPerSecond] or null
+  if (!AKEYS) return null;
+  const i = AKEYS.get(anorm(text)), V = AVOICE[v] && AVOICE[v].d;
+  if (i == null || !V || V.c[i * 3] < 0) return null;
+  return [v + '-' + V.c[i * 3], V.c[i * 3 + 1], V.c[i * 3 + 2], V.bps];
+}
+function mp3FrameLen(u, i) {   // bytes in the Layer III frame whose header starts at u[i], or 0
+  if (i + 4 > u.length || u[i] !== 0xFF || (u[i + 1] & 0xE0) !== 0xE0) return 0;
+  const ver = (u[i + 1] >> 3) & 3, layer = (u[i + 1] >> 1) & 3, bri = (u[i + 2] >> 4) & 15, sri = (u[i + 2] >> 2) & 3, pad = (u[i + 2] >> 1) & 1;
+  if (ver === 1 || layer !== 1 || bri === 0 || bri === 15 || sri === 3) return 0;
+  const BR = ver === 3 ? [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320] : [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160];
+  const SR = ver === 3 ? [44100, 48000, 32000] : ver === 2 ? [22050, 24000, 16000] : [11025, 12000, 8000];
+  return Math.floor((ver === 3 ? 144 : 72) * BR[bri] * 1000 / SR[sri]) + pad;
+}
+function mp3Sync(u, from) {   // first frame header that is followed by another valid one
+  for (let i = from || 0; i + 4 < u.length && i < (from || 0) + 4000; i++) { const n = mp3FrameLen(u, i); if (n && (i + n + 4 > u.length || mp3FrameLen(u, i + n))) return i; }
+  return -1;
+}
+function fetchRange(url, b0, b1) {
+  return fetch(url, { headers: { Range: 'bytes=' + b0 + '-' + b1 } }).then(r => {
+    if (r.status === 206) return r.arrayBuffer().then(b => new Uint8Array(b));
+    if (r.status === 200) return r.arrayBuffer().then(b => new Uint8Array(b).slice(b0, b1 + 1));
+    throw new Error('HTTP ' + r.status + ' for ' + url.split('/').pop());
+  });
+}
+const CLIP_PRE = 110, CLIP_POST = 90;   // ms taken before/after a clip (clips sit in 300 ms of silence)
+const CLIP_MEM = new Map(), CLIP_WAIT = new Map();
+function clipBytes(c) {
+  const key = c[0] + ':' + c[1];
+  if (CLIP_MEM.has(key)) { const v = CLIP_MEM.get(key); CLIP_MEM.delete(key); CLIP_MEM.set(key, v); return Promise.resolve(v); }
+  if (CLIP_WAIT.has(key)) return CLIP_WAIT.get(key);
+  const b0 = Math.max(0, Math.floor((c[1] - CLIP_PRE) / 1000 * c[3])), b1 = Math.ceil((c[2] + CLIP_POST) / 1000 * c[3]) + 8;
+  const p = fetchRange(AUDIO_BASE + c[0] + '.mp3', b0, b1).then(u => {
+    const s = mp3Sync(u, 0); if (s < 0) throw new Error('no MP3 frame in the range');
+    const v = u.slice(s); CLIP_MEM.set(key, v); if (CLIP_MEM.size > 400) CLIP_MEM.delete(CLIP_MEM.keys().next().value);
+    return v;
+  }).finally(() => CLIP_WAIT.delete(key));
+  CLIP_WAIT.set(key, p); p.catch(() => { }); return p;
+}
+function prefetch(text, v) { try { const c = clipOf(text, v || mainVoice()); if (c) clipBytes(c).catch(() => { }); } catch (e) { } }
+function prefetchIn(scope) { if (!scope || !AKEYS) return; [...scope.querySelectorAll('[data-say]')].slice(0, 16).forEach(b => prefetch(b.dataset.say, b.dataset.v)); }
+let AEL = null, clipSeq = 0, clipTimer = 0, clipUrl = null;
+function audioEl() { if (!AEL) { AEL = new Audio(); AEL.preload = 'auto'; AEL.setAttribute('playsinline', ''); } return AEL; }
+const SILENT_WAV = 'data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
+function unlockAudio() {   // a silent clip played inside a tap allows later programmatic play on iPhone
+  audioSession();
+  try { const a = audioEl(); if (a.dataset.unlocked || clipBusy) return; a.src = SILENT_WAV; a.volume = 0; const p = a.play(); if (p && p.catch) p.catch(() => { }); a.dataset.unlocked = '1'; } catch (e) { }
+}
+let clipBusy = false;
+function stopClip() { clearTimeout(clipTimer); clipSeq++; clipBusy = false; const a = AEL; if (a) { a.onended = a.onerror = null; try { a.pause(); } catch (e) { } } }
+function playClip(c, opt, text) {
+  stopClip(); const a = audioEl(), seq = clipSeq; clipBusy = true;
+  const rate = Math.min(1.5, Math.max(.5, (opt.rate || (ST && ST.rate) || 1)));
+  const finish = () => { if (seq !== clipSeq) return; clipSeq++; clipBusy = false; clearTimeout(clipTimer); a.onended = a.onerror = null; AUDIO_LAST = 'played ' + c[0]; if (opt.end) opt.end(); };
+  const fail = why => { if (seq !== clipSeq) return; clipSeq++; clipBusy = false; clearTimeout(clipTimer); a.onended = a.onerror = null; try { a.pause(); } catch (e) { } AUDIO_ERR = why; logErr('audio ' + why); phoneSay(text, opt); };
+  clipBytes(c).then(u => {
+    if (seq !== clipSeq) return;
+    if (clipUrl) { try { URL.revokeObjectURL(clipUrl); } catch (e) { } }
+    clipUrl = URL.createObjectURL(new Blob([u], { type: 'audio/mpeg' }));
+    a.muted = false; a.volume = 1; a.onended = finish;
+    a.onerror = () => fail('media error ' + (a.error ? a.error.code : ''));
+    a.src = clipUrl;
+    try { a.preservesPitch = true; a.webkitPreservesPitch = true; } catch (e) { }
+    a.defaultPlaybackRate = rate; a.playbackRate = rate;
+    const p = a.play(); if (p && p.catch) p.catch(err => fail('play ' + (err && err.name)));
+    clipTimer = setTimeout(finish, ((c[2] - c[1] + 600) / rate) + 2500);   // safety net only
+  }).catch(e => fail('fetch ' + (e && e.message ? e.message : e)));
+}
+let sayWait = 0;
+function say(text, opt) {
+  opt = opt || {}; stopSpeech();
+  const v = opt.v || (opt.male != null ? genderVoice(opt.male) : mainVoice()), o = Object.assign({}, opt, { v });
+  const c = clipOf(text, v);
+  if (c) return playClip(c, o, text);
+  if (AKEYS && AVOICE[v] && AVOICE[v].d) return phoneSay(text, o);   // not recorded
+  const run = ++sayWait;   // the recordings index is still loading (first seconds after opening)
+  Promise.all([loadKeys(), loadVoice(v)]).then(() => { if (run !== sayWait) return; const c2 = clipOf(text, v); if (c2) playClip(c2, o, text); else phoneSay(text, o); })
+    .catch(() => { if (run === sayWait) phoneSay(text, o); });
+}
+function stopSpeech() { sayWait++; stopClip(); try { speechSynthesis.cancel(); } catch (e) { } }
+
+// fallback: the phone's own voice (offline, free; unreliable on iOS 27)
 let VOICES = [], SPEECH_ERR = '';
 function audioSession() { try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { } }
 function loadVoices() { try { VOICES = (speechSynthesis.getVoices() || []).filter(v => /^en[-_]/i.test(v.lang)); } catch (e) { VOICES = []; } }
 if ('speechSynthesis' in window) { loadVoices(); try { speechSynthesis.onvoiceschanged = loadVoices; } catch (e) { } }
-function voiceScore(v, accent, male) {
+function voiceScore(v, male) {
   let s = 0; const id = (v.name + ' ' + v.voiceURI).toLowerCase();
-  if (v.lang.replace('_', '-').toUpperCase().endsWith(accent)) s += 50;
+  if (v.lang.replace('_', '-').toUpperCase().endsWith('US')) s += 50;
   if (/premium|enhanced|neural|natural/.test(id)) s += 20;
   if (/novelty|whisper|bells|bad news|boing|bubbles|cellos|zarvox|trinoids|organ|albert|jester|superstar|wobble|grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley/.test(id)) s -= 80;
-  const m = /daniel|arthur|oliver|alex|tom|aaron|fred|guy|ryan|male|david|mark|george|james/.test(id);
-  const f = /samantha|serena|kate|karen|moira|tessa|martha|ava|allison|susan|victoria|zira|female|libby|sonia|jenny|aria|fiona|catherine/.test(id);
-  if (male === true && m) s += 15; if (male === false && f) s += 15;
-  if (male === true && f) s -= 10; if (male === false && m) s -= 10;
+  const m = /alex|tom|aaron|fred|ryan|male|david|mark|james|evan|nathan/.test(id), f = /samantha|ava|allison|susan|zira|female|jenny|aria|nicky|zoe/.test(id);
+  if (male === true && m) s += 15; if (male === false && f) s += 15; if (male === true && f) s -= 10; if (male === false && m) s -= 10;
   return s;
 }
-function bestVoice(male) {
-  if (!VOICES.length) loadVoices();
-  const acc = (ST && ST.accent) || 'GB';
-  const pref = S.get('en.voice', '');
-  if (male == null && pref) { const v = VOICES.find(x => x.voiceURI === pref); if (v) return v; }
-  return VOICES.slice().sort((a, b) => voiceScore(b, acc, male) - voiceScore(a, acc, male))[0] || null;
-}
-let speakQ = [];
-function say(text, opt) {
+function phoneSay(text, opt) {
   opt = opt || {};
-  if (!('speechSynthesis' in window)) { if (!opt.quiet) toast('This phone has no speech voice'); if (opt.end) opt.end(); return; }
+  if (!('speechSynthesis' in window)) { if (opt.end) opt.end(); return; }
   audioSession();
   try {
-    const busy = speechSynthesis.speaking || speechSynthesis.pending;
-    if (busy) speechSynthesis.cancel();
-    const go = (useNamed) => {
-      const u = new SpeechSynthesisUtterance(text);
-      const v = useNamed ? bestVoice(opt.male) : null;
-      if (v) { u.voice = v; u.lang = v.lang; } else u.lang = (ST && ST.accent === 'US') ? 'en-US' : 'en-GB';
-      u.rate = Math.max(.5, Math.min(1.2, (opt.rate || (ST && ST.rate) || 1) * .95));
-      u.pitch = opt.pitch || 1;
-      let started = false;
-      u.onstart = () => { started = true; };
-      u.onend = () => { if (opt.end) opt.end(); };
-      u.onerror = e => {
-        const c = (e && e.error) || 'error'; if (c === 'interrupted' || c === 'canceled') return;
-        SPEECH_ERR = c; logErr('speech ' + c);
-        if (useNamed && !opt._retry) { opt._retry = true; go(false); } else if (opt.end) opt.end();
-      };
-      speechSynthesis.speak(u);
-      if (useNamed && !opt._retry) setTimeout(() => { if (!started && !speechSynthesis.speaking && !opt._retry) { opt._retry = true; try { speechSynthesis.cancel(); } catch (x) { } go(false); } }, 1800);
-    };
-    if (busy) setTimeout(() => go(true), 90); else go(true);
+    if (!VOICES.length) loadVoices();
+    const male = (VOICE_LIST.find(x => x[0] === opt.v) || [, , 'f'])[2] === 'm';
+    const u = new SpeechSynthesisUtterance(text);
+    const v = VOICES.slice().sort((a, b) => voiceScore(b, male) - voiceScore(a, male))[0];
+    if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'en-US';
+    u.rate = Math.max(.5, Math.min(1.2, (opt.rate || (ST && ST.rate) || 1) * .95));
+    u.onend = () => { if (opt.end) opt.end(); };
+    u.onerror = e => { const c = (e && e.error) || 'error'; if (c === 'interrupted' || c === 'canceled') return; SPEECH_ERR = c; logErr('speech ' + c); if (opt.end) opt.end(); };
+    speechSynthesis.speak(u);
   } catch (e) { logErr('say ' + e.message); if (opt.end) opt.end(); }
 }
-function stopSpeech() { try { speechSynthesis.cancel(); } catch (e) { } }
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-say]');
-  if (b) { e.stopPropagation(); say(b.dataset.say, { rate: b.dataset.slow ? .7 : undefined }); }
+  if (b) { e.stopPropagation(); unlockAudio(); say(b.dataset.say, { rate: b.dataset.slow ? .7 : undefined, v: b.dataset.v || undefined }); }
 }, true);
+['touchend', 'click'].forEach(ev => document.addEventListener(ev, unlockAudio, { passive: true, capture: true }));
 const sayBtn = (t, cls) => `<button class="say ${cls || ''}" data-say="${esc(t)}" aria-label="listen">🔊</button>`;
 
 /* ------------------------------ access: owner code & invitations ------------------------------ */
@@ -162,6 +258,13 @@ const dueList = (at) => WORDS.filter(w => { const c = ST.cards[w.id]; return c &
 function lessonDone(L) { return L.words.every(id => ST.cards[id]); }
 function nextLesson() { return LESSONS.find(L => !lessonDone(L)) || null; }
 const lessonsDone = () => LESSONS.filter(lessonDone).length;
+const SESSION_NEW = 10;                                    // new words per session; the day's target is reached over a few sessions
+const paceFor = lv => LEVELS.indexOf(lv) <= 2 ? 30 : 20;   // A1, A2, B1: 30 a day · B2, C1, C2: 20 a day
+function dayTarget() { const L = nextLesson(); return L ? paceFor(L.lv) : 0; }
+function newToday() { const t0 = new Date(Date.now()); t0.setHours(0, 0, 0, 0); let n = 0; for (const k in ST.cards) if ((ST.cards[k].t || 0) >= +t0) n++; return n; }
+function freshWords(n) { const out = []; if (n <= 0) return out; for (const L of LESSONS) for (const id of L.words) if (!ST.cards[id]) { out.push(WMAP[id]); if (out.length >= n) return out; } return out; }
+function daysLeft() { let a = 0, b = 0; for (const w of WORDS) if (!ST.cards[w.id]) { if (LEVELS.indexOf(w.lv) <= 2) a++; else b++; } return Math.ceil(a / 30 + b / 20); }
+const fmt = n => n.toLocaleString('en-US');
 function lessonIdx(L) { return LESSONS.indexOf(L); }
 function lessonTitle(L) { const u = UMAP[L.u]; return u.t + ' · part ' + (L.k + 1); }
 // mistakes come back in later sessions until answered right in a later session
@@ -271,7 +374,7 @@ function wordEx(w, kind) {
       mcq(body, [w.fa, ...distractWords(w, 3, 'fa').map(x => x.fa)], w.fa, done, 'fa');
     },
     fa2en(body, done) {
-      body.innerHTML = `<div class="eyebrow" style="text-align:center">choose the English</div><div class="prompt"><div class="fa">${esc(w.fa)}</div><div class="xs" style="margin-top:6px">${esc(POS[w.pos] || '')}</div></div>`;
+      body.innerHTML = `<div class="eyebrow" style="text-align:center">choose the English</div><div class="prompt"><div class="fa">${esc(w.fa)}</div><div style="margin-top:6px">${posTag(w.pos)}</div></div>`;
       mcq(body, [w.w, ...distractWords(w, 3, 'w').map(x => x.w)], w.w, (ok, cor) => { say(w.w, { quiet: true }); done(ok, cor); });
     },
     listen(body, done) {
@@ -305,12 +408,12 @@ function wordEx(w, kind) {
     },
     syn(body, done) {
       const s = w.syn[0];
-      body.innerHTML = `<div class="eyebrow" style="text-align:center">which word is a synonym?</div><div class="prompt"><div class="w" style="font-size:28px">${esc(s)}</div><div class="xs" style="margin-top:6px">synonym = a word with a similar meaning · مترادف</div></div>`;
+      body.innerHTML = `<div class="eyebrow" style="text-align:center">which word is a synonym?</div><div class="prompt"><div class="w" style="font-size:28px">${esc(s)}</div><div class="xs" style="margin-top:6px">synonym = a word with a similar meaning</div><div class="xs fa c">مترادف = واژه‌ای با معنای نزدیک</div></div>`;
       const ds = distractWords(w, 3, 'w').filter(x => !x.syn.includes(s)).map(x => x.w);
       mcq(body, [w.w, ...ds.slice(0, 3)], w.w, done);
     }
   };
-  return { kind: 'word', key, w, render: R[kind] || R.en2fa, grade: ok => grade(w.id, ok), feedback: () => `<b>${esc(w.w)}</b> = <span class="fa">${esc(w.fa)}</span><div style="margin-top:6px">${esc(w.ex)}</div><div class="fa" style="margin-top:2px">${esc(w.exfa)}</div>`, remake: () => wordEx(w) };
+  return { kind: 'word', key, w, render: R[kind] || R.en2fa, grade: ok => grade(w.id, ok), feedback: () => `<b>${esc(w.w)}</b><div class="fa">${esc(w.fa)}</div><div style="margin-top:6px">${esc(w.ex)}</div><div class="fa" style="margin-top:2px">${esc(w.exfa)}</div>`, remake: () => wordEx(w) };
 }
 function introCard(w, L, i, n) {
   return {
@@ -318,9 +421,9 @@ function introCard(w, L, i, n) {
       body.innerHTML = `<div class="between"><span class="eyebrow">new word ${i + 1} / ${n}</span>${lvChip(w.lv)}</div>
         ${pic(w, true)}
         <div class="c" style="text-align:center;margin-top:10px"><div class="row" style="justify-content:center"><span class="w" style="font-size:34px;font-weight:850">${esc(w.w)}</span>${sayBtn(w.w)}</div>
-        <div class="xs">${esc(POS[w.pos] || '')}</div>
+        ${posTag(w.pos)}
         <div class="fa" style="font-size:24px;margin-top:6px;text-align:center">${esc(w.fa)}</div>
-        ${w.syn.length ? `<div style="margin-top:8px"><span class="xs">synonyms · مترادف: </span>${w.syn.map(s => `<span class="syn">${esc(s)}</span>`).join('')}</div>` : ''}</div>
+        ${w.syn.length ? `<div style="margin-top:8px"><div class="xs">synonyms</div><div class="xs fa c">مترادف‌ها</div>${w.syn.map(s => `<span class="syn">${esc(s)}</span>`).join('')}</div>` : ''}</div>
         <div class="ex"><div class="between"><div class="en grow">${esc(w.ex)}</div>${sayBtn(w.ex)}</div><div class="fa">${esc(w.exfa)}</div></div>
         <button class="btn" id="gotit" style="margin-top:18px">Got it →</button>`;
       say(w.w, { quiet: true });
@@ -352,7 +455,7 @@ function gramHTML(g, review) {
     <div class="card">${g.r.map(r => `<div class="rule"><div style="font-weight:600">${esc(r[0])}</div><div class="fa" style="color:var(--dim);font-size:14px;margin-top:3px">${esc(r[1])}</div></div>`).join('')}</div>
     <div class="eyebrow" style="margin:14px 4px 4px">examples</div>
     <div class="card">${(review ? g.ex.slice(0, 3) : g.ex).map(x => `<div class="list-item"><div class="grow"><div style="font-weight:600">${esc(x[0])}</div><div class="fa" style="color:var(--dim);font-size:14px">${esc(x[1])}</div></div>${sayBtn(x[0])}</div>`).join('')}</div>
-    <div class="tip"><div class="eyebrow" style="color:var(--gold)">tip for Persian speakers · نکته</div><div class="fa" style="margin-top:4px;font-size:15px">${esc(g.tip)}</div></div>`;
+    <div class="tip">${lab('tip for Persian speakers', 'نکته برای فارسی‌زبان‌ها', 'color:var(--gold)')}<div class="fa" style="margin-top:4px;font-size:15px">${esc(g.tip)}</div></div>`;
 }
 function grammarDrill(g, k) {
   const d = g.d[k];
@@ -360,7 +463,7 @@ function grammarDrill(g, k) {
     kind: 'gdrill', key: 'g:' + g.id + ':' + k, render(body, done) {
       const q = esc(d[0]).replace('___', '<span class="gap">_____</span>');
       body.innerHTML = `<div class="between"><span class="eyebrow">grammar · ${esc(g.t)}</span>${lvChip(g.lv)}</div><div class="card" style="margin-top:16px;font-size:19px;font-weight:600;text-align:center">${q}</div>`;
-      mcq(body, d.slice(1), d[1], (ok, cor) => { if (d[0].includes('___')) say(d[0].replace('___', cor === '—' ? '' : cor).replace(/s+/g, ' '), { quiet: true }); else say(cor, { quiet: true }); done(ok, cor); });
+      mcq(body, d.slice(1), d[1], (ok, cor) => { if (d[0].includes('___')) say(d[0].replace('___', cor === '—' ? '' : cor).replace(/\s+/g, ' '), { quiet: true }); else say(cor, { quiet: true }); done(ok, cor); });
     },
     grade(ok) { const s = ST.gram[g.id] || (ST.gram[g.id] = { n: 0, ok: 0 }); s.n++; if (ok) s.ok++; if (!ok) missNote('g:' + g.id + ':' + k, false); save(); },
     feedback: () => esc(d[0].includes('___') ? d[0].replace('___', d[1]) : d[1]), remake: () => grammarDrill(g, k)
@@ -385,17 +488,22 @@ function dialogueCard(u, blind) {
     }
   };
 }
-function dlgLines(u) { const d = u.d; return d.l.map((l, i) => `<div class="dl ${l[0] ? 'r' : ''}"><div class="bub" data-li="${i}" data-say="${esc(l[1])}"><div class="spk">${esc(d.sp[l[0]])}</div><div>${esc(l[1])}</div><div class="fa">${esc(l[2])}</div></div></div>`).join(''); }
-function isMaleName(n) { return /^(reza|sam|tom|omid|hamed|babak|kian|ali|ben|mark|jack|farhad|kaveh|mehdi|sina|paul|kamran|pouya|nima|arman|shahin|dariush|dr karimi|manager|doctor|clerk|waiter|landlord|officer|host)$/i.test(n.trim()); }
+function dlgVoices(u) {   // a man's or woman's voice per speaker; role names (Seller, Doctor…) take the opposite of the other speaker
+  const sp = u.d.sp, g = sp.map(n => isMaleName(n) ? 'm' : isFemaleName(n) ? 'f' : '');
+  sp.forEach((_, i) => { if (!g[i]) { const o = g.find((x, j) => j !== i && x); g[i] = o ? (o === 'm' ? 'f' : 'm') : (i % 2 ? 'm' : 'f'); } });
+  const out = []; g.forEach((x, i) => { out[i] = genderVoice(x === 'm', out.find(v => v && v[0] === x)); }); return out;
+}
+function dlgLines(u) { const d = u.d, vs = dlgVoices(u); return d.l.map((l, i) => `<div class="dl ${l[0] ? 'r' : ''}"><div class="bub" data-li="${i}" data-v="${vs[l[0]]}" data-say="${esc(l[1])}"><div class="spk">${esc(d.sp[l[0]])}</div><div>${esc(l[1])}</div><div class="fa">${esc(l[2])}</div></div></div>`).join(''); }
+function isMaleName(n) { return /^(reza|sam|tom|omid|hamed|babak|kian|ali|ben|mark|jack|farhad|kaveh|mehdi|sina|paul|kamran|pouya|nima|arman|shahin|dariush|dr karimi|manager|doctor|clerk|waiter|landlord|officer|host|arash|hamid|behnam|kourosh|pedram|mike|liam|dan|saeed|navid|lucas|amir|rob|majid|dad|mehran|hassan|farid|oliver|kamyar|payam|ramin|jake|kasra|daniel|siamak|leo|yousef|saman|shahab|boy|ehsan|grandfather|behrouz|father|son|peter|husband|max|brother|fisherman|craftsman)$/i.test(n.trim()); }
+function isFemaleName(n) { return /^(emma|maryam|nora|leila|mina|lily|ladan|zoe|ella|kate|grace|fariba|anna|golnar|shiva|lucy|mum|tara|nasrin|jane|elham|soraya|woman|sophie|neda|parisa|nazanin|sahar|shirin|emily|roya|yasmin|mahsa|arezoo|rose|mia|sara|ava|clara|parvaneh|shaghayegh|hannah|chloe|golnaz|hoda|lena|taraneh|samira|fatemeh|grandmother|laleh|nadia|mother|sima|wife|grandma|helen|laura|jess|bita|leyla|lisa|nina|olivia|daughter|sister|girl)$/i.test(n.trim()); }
 let DLG_RUN = 0;
 function playDialogue(u, scope) {
-  const run = ++DLG_RUN, d = u.d; let i = 0;
+  const run = ++DLG_RUN, d = u.d, vs = dlgVoices(u); let i = 0;
   const step = () => {
     if (run !== DLG_RUN || i >= d.l.length) { scope && scope.querySelectorAll('.bub').forEach(b => b.classList.remove('now')); return; }
     const l = d.l[i], b = scope && scope.querySelector(`[data-li="${i}"]`);
     scope && scope.querySelectorAll('.bub').forEach(x => x.classList.remove('now')); if (b) { b.classList.add('now'); }
-    const male = isMaleName(d.sp[l[0]]);
-    say(l[1], { quiet: true, male, pitch: l[0] ? 1.08 : .92, end: () => { i++; setTimeout(step, 350); } });
+    say(l[1], { quiet: true, v: vs[l[0]], end: () => { if (run === DLG_RUN) { i++; setTimeout(step, 350); } } });
   };
   step();
 }
@@ -432,7 +540,7 @@ function step() {
   body.innerHTML = ''; body.dataset.done = ''; body.scrollTop = 0;
   $('#rbar').style.width = (100 * sess.i / sess.items.length) + '%';
   $('#rcount').textContent = (sess.i + 1) + '/' + sess.items.length;
-  try { it.render(body, (ok, cor) => answered(it, ok, cor)); }
+  try { it.render(body, (ok, cor) => answered(it, ok, cor)); prefetchIn(body); }
   catch (e) { logErr('render ' + it.key + ' ' + e.message); sess.i++; step(); }
 }
 function answered(it, ok, cor) {
@@ -444,7 +552,7 @@ function answered(it, ok, cor) {
     sess.items.splice(Math.min(sess.items.length, sess.i + 4), 0, r);
   }
   const body = $('#rbody');
-  const fb = el('div', 'feedback ' + (ok ? 'ok' : 'bad'), (ok ? '✓ Correct! · درست است' : '✗ Not quite · نادرست') + (it.feedback ? `<div style="margin-top:6px">${it.feedback()}</div>` : ''));
+  const fb = el('div', 'feedback ' + (ok ? 'ok' : 'bad'), (ok ? '<div>✓ Correct!</div><div class="fa">درست است</div>' : '<div>✗ Not quite</div><div class="fa">نادرست</div>') + (it.feedback ? `<div style="margin-top:6px">${it.feedback()}</div>` : ''));
   body.appendChild(fb);
   const nb = el('button', 'btn', 'Continue →'); nb.style.marginTop = '12px';
   nb.onclick = () => { stopSpeech(); sess.i++; step(); };
@@ -496,8 +604,9 @@ function buildDaily() {
   // 2. due reviews
   const due = dueList().filter(w => !usedW.has(w.id)).slice(0, 12);
   due.slice(0, 6).forEach(w => { items.push(wordEx(w)); usedW.add(w.id); });
-  // 3. new words of the next lesson: intro card, then a check after every two
-  const L = nextLesson(); const fresh = L ? L.words.filter(id => !ST.cards[id]).slice(0, ST.perDay || 8).map(id => WMAP[id]) : [];
+  // 3. new words in road order (across lessons): intro card, then a check after every two
+  const L = nextLesson(), fresh = freshWords(Math.min(SESSION_NEW, Math.max(0, dayTarget() - newToday())));
+  fresh.forEach(w => { prefetch(w.w); prefetch(w.ex); });
   const half = Math.ceil(fresh.length / 2);
   const intro = (ws, off) => { ws.forEach((w, i) => { items.push(introCard(w, L, off + i, fresh.length)); if (i % 2 === 1) { items.push(wordEx(ws[i - 1], 'en2fa')); items.push(wordEx(w, 'listen')); } }); if (ws.length % 2) items.push(wordEx(ws[ws.length - 1], 'en2fa')); };
   intro(fresh.slice(0, half), 0);
@@ -509,8 +618,10 @@ function buildDaily() {
   // 5. remaining reviews, mixed with production practice of today's words
   due.slice(6).forEach(w => items.push(wordEx(w)));
   fresh.forEach(w => { if (blankIn(w.ex, w.w)) items.push(wordEx(w, 'cloze')); });
-  // 6. listening: when today's lesson finishes a unit, hear its dialogue and answer
-  if (L && L.k === Math.ceil(UMAP[L.u].w.length / 8) - 1 && fresh.length && !ST.dlg[L.u]) { const u = UMAP[L.u]; items.push(dialogueCard(u, true)); u.d.q.forEach((_, k) => items.push(dlgQuestion(u, k))); }
+  // 6. listening: when today's new words finish a unit, hear its dialogue and answer
+  const fid = new Set(fresh.map(w => w.id));
+  [...new Set(fresh.map(w => w.u))].filter(id => !ST.dlg[id] && UMAP[id].w.every((_, i) => ST.cards[id + '-' + i] || fid.has(id + '-' + i))).slice(0, 2)
+    .forEach(id => { const u = UMAP[id]; items.push(dialogueCard(u, true)); u.d.q.forEach((_, k) => items.push(dlgQuestion(u, k))); });
   return items;
 }
 function quickReview() {
@@ -534,7 +645,7 @@ function passageCard(P) {
       <div id="ptext" class="card hide">${P.s.map((x, i) => `<div class="rule" data-pi="${i}" data-say="${esc(x[0])}"><div style="font-weight:600">${esc(x[0])}</div><div class="fa" style="color:var(--dim);font-size:14px;margin-top:3px">${esc(x[1])}</div></div>`).join('')}</div>
       <button class="btn line sm" id="pshow" style="margin-top:8px">Show the text</button>
       <button class="btn" id="pnext" style="margin-top:12px">Answer the questions →</button>`;
-      const play = () => { const run = ++DLG_RUN; let i = 0; const nx = () => { if (run !== DLG_RUN || i >= P.s.length) return; say(P.s[i][0], { quiet: true, end: () => { i++; setTimeout(nx, 300); } }); }; nx(); };
+      const play = () => { const run = ++DLG_RUN; let i = 0; const nx = () => { if (run !== DLG_RUN || i >= P.s.length) return; say(P.s[i][0], { quiet: true, end: () => { if (run === DLG_RUN) { i++; setTimeout(nx, 300); } } }); }; nx(); };
       body.querySelector('#pplay').onclick = play;
       body.querySelector('#pshow').onclick = () => body.querySelector('#ptext').classList.toggle('hide');
       body.querySelector('#pnext').onclick = () => { stopSpeech(); DLG_RUN++; done(true); };
@@ -552,8 +663,8 @@ function passageQ(P, k) {
 }
 
 /* ------------------------------ screens ------------------------------ */
-let TAB = 'today', SUB = null;
-const TABS = [['today', '🏠', 'Today'], ['words', '📚', 'Words'], ['grammar', '🧠', 'Grammar'], ['listen', '🎧', 'Listen'], ['road', '🗺️', 'Road'], ['you', '👤', 'You']];
+let TAB = 'road', SUB = null, ROAD_OPEN = null;
+const TABS = [['road', '🗺️', 'Road'], ['today', '🏠', 'Today'], ['words', '📚', 'Words'], ['grammar', '🧠', 'Grammar'], ['listen', '🎧', 'Listen'], ['you', '👤', 'You']];
 function render() {
   if (!ME) return;
   const a = $('#app');
@@ -562,22 +673,30 @@ function render() {
   catch (e) { logErr('view ' + TAB + ' ' + e.message); h = `<div class="card">Something went wrong. ${esc(e.message)}</div>`; }
   a.innerHTML = h + `<nav id="tabs">${TABS.map(t => `<button data-tab="${t[0]}" class="${TAB === t[0] ? 'on' : ''}"><b>${t[1]}</b>${t[2]}</button>`).join('')}</nav>`;
   a.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { TAB = b.dataset.tab; SUB = null; stopSpeech(); DLG_RUN++; render(); window.scrollTo(0, 0); });
-  bind(a);
+  bind(a); prefetchIn(a);
 }
 function ring(p, label) {
   const r = 24, c = 2 * Math.PI * r;
   return `<svg class="ring" viewBox="0 0 58 58"><circle cx="29" cy="29" r="${r}" fill="none" stroke="rgba(255,255,255,.09)" stroke-width="6"/><circle cx="29" cy="29" r="${r}" fill="none" stroke="url(#rg)" stroke-width="6" stroke-linecap="round" stroke-dasharray="${c * p} ${c}" transform="rotate(-90 29 29)"/><text x="29" y="33" text-anchor="middle" font-size="13" font-weight="800" fill="#0F2A6B">${label}</text></svg>`;
 }
+function progressCard() {
+  const ld = lessonsDone(), wl = seenWords().length, nt = newToday(), tg = dayTarget();
+  return `<div class="card"><div class="row"><div class="stat"><b>${fmt(ld)}<small> / ${fmt(LESSONS.length)}</small></b><span class="xs">lessons done</span><span class="xs fa c">درس انجام‌شده</span></div>
+    <div class="stat"><b>${fmt(wl)}<small> / ${fmt(WORDS.length)}</small></b><span class="xs">words learned</span><span class="xs fa c">واژهٔ یادگرفته</span></div></div>
+    ${tg ? `<div class="between" style="margin-top:12px"><span class="sm">New words today</span><b>${Math.min(nt, tg)} / ${tg}</b></div><div class="fa sm">واژه‌های جدید امروز</div><div class="bar ${nt >= tg ? 'gold' : ''}" style="margin-top:6px"><i style="width:${Math.min(100, Math.round(100 * nt / tg))}%"></i></div>` : ''}</div>`;
+}
 function vToday() {
   const L = nextLesson(), due = dueList().length, cl = curLevel(), g = nextGrammar(), mc = missCount(), st = streakNow();
   const hr = new Date().getHours(), greet = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
-  return `<div class="between"><div><div class="eyebrow">english · a1 → c2</div><div class="h1">${greet}, ${esc(ME.name)}!</div></div><div class="chip gold">🔥 ${st}</div></div>
+  const tg = dayTarget(), left = Math.max(0, tg - newToday()), n = Math.min(SESSION_NEW, left), FL = n ? LESSONS[LESSONS.indexOf(L)] : null;
+  return `<div class="topbar"><div class="eyebrow">english · a1 → c2</div><div class="chip gold">🔥 ${st}</div></div><div class="h1">${greet}, ${esc(ME.name)}!</div>
   <button class="card tap glow" id="daily" style="margin-top:14px">
-    <div class="eyebrow">today's lesson · درس امروز</div>
-    <div class="between" style="margin-top:6px"><div class="grow"><div class="h2">${L ? UMAP[L.u].i + ' ' + esc(lessonTitle(L)) : '🏁 Review & keep fluent'}</div>
-    ${L ? `<div class="fa" style="text-align:left;font-size:14px;color:var(--dim)">${esc(UMAP[L.u].fa)}</div>` : ''}<div class="sm">${due} reviews · ${L ? L.words.filter(id => !ST.cards[id]).length + ' new words · ' : ''}grammar${g ? ': ' + esc(g.t) : ' review'}</div></div><span class="say big" style="pointer-events:none">▶</span></div>
+    ${lab("today's lesson", 'درس امروز')}
+    <div class="between" style="margin-top:6px"><div class="grow"><div class="h2">${FL ? UMAP[FL.u].i + ' ' + esc(lessonTitle(FL)) : L ? '✓ Today\'s new words are done' : '🏁 Review & keep fluent'}</div>
+    ${FL ? `<div class="fa" style="font-size:14px;color:var(--dim)">${esc(UMAP[FL.u].fa)}</div>` : L ? '<div class="fa" style="font-size:14px;color:var(--dim)">واژه‌های جدید امروز تمام شد؛ مرور کنید.</div>' : ''}<div class="sm">${n ? n + ' new words · ' : ''}${due} reviews · grammar${g ? ': ' + esc(g.t) : ' review'}</div></div><span class="say big" style="pointer-events:none">▶</span></div>
   </button>
-  ${mc ? `<button class="card tap" id="miss"><div class="between"><div><div class="eyebrow" style="color:var(--coral)">your mistakes · اشتباهات</div><div class="h3" style="margin-top:4px">${mc} question${mc > 1 ? 's' : ''} to master</div><div class="xs">They also open your next daily lessons until you get them right again.</div></div><span style="font-size:28px">🎯</span></div></button>` : ''}
+  ${progressCard()}
+  ${mc ? `<button class="card tap" id="miss"><div class="between"><div>${lab('your mistakes', 'اشتباهات شما', 'color:var(--coral)')}<div class="h3" style="margin-top:4px">${mc} question${mc > 1 ? 's' : ''} to master</div><div class="xs">They also open your next daily lessons until you get them right again.</div></div><span style="font-size:28px">🎯</span></div></button>` : ''}
   <div class="card"><div class="row">${ring(cl.pct, cl.lv)}<div class="grow"><div class="eyebrow">your level</div><div class="h3">${Math.round(cl.pct * 100)}% through ${cl.lv}</div><div class="bar" style="margin-top:8px"><i style="width:${Math.round(100 * lessonsDone() / LESSONS.length)}%"></i></div><div class="xs" style="margin-top:4px">Lesson ${Math.min(LESSONS.length, lessonsDone() + 1)} of ${LESSONS.length} on the road to C2</div></div></div></div>
   <div class="row"><button class="card tap grow" id="qr" style="margin:0"><div style="font-size:24px">⚡</div><div class="h3">Quick review</div><div class="xs">${seenWords().length} words met</div></button>
   <button class="card tap grow" id="gl" style="margin:0"><div style="font-size:24px">🎧</div><div class="h3">Listening</div><div class="xs">${UNITS.filter(u => ST.dlg[u.id]).length} dialogues done</div></button></div>
@@ -595,12 +714,12 @@ function vWords() {
     <button class="btn sm" data-upr="${u.id}" style="margin-top:12px">Practise this unit</button>
     <div class="card">${u.w.map((_, i) => { const w = WMAP[u.id + '-' + i], c = ST.cards[w.id]; return `<div class="list-item">${pic(w)}<div class="grow"><div class="between"><b>${esc(w.w)}</b><span class="xs">${c ? (c.b >= 3 ? '<span class="done-mark">✓ known</span>' : 'learning') : 'new'}</span></div><div class="fa" style="color:var(--dim);font-size:14px">${esc(w.fa)}</div>${w.syn.length ? `<div class="xs">≈ ${esc(w.syn.join(', '))}</div>` : ''}<div class="xs" style="margin-top:2px">${esc(w.ex)}</div></div>${sayBtn(w.w)}</div>`; }).join('')}</div>`;
   }
-  return `<div class="eyebrow">vocabulary · واژگان</div><div class="h1">Words</div>
+  return `${lab('vocabulary', 'واژگان')}<div class="h1">Words</div>
   <div class="row"><div class="stat"><b>${seenWords().length}</b><span class="xs">met</span></div><div class="stat"><b>${WORDS.filter(w => known(w.id)).length}</b><span class="xs">known</span></div><div class="stat"><b>${dueList().length}</b><span class="xs">due now</span></div></div>
   <button class="btn" id="qr" style="margin-top:12px">⚡ Quick review (20)</button>
   <input class="typebox" id="wsearch" placeholder="search English or فارسی" style="margin-top:12px;text-align:left;font-size:15px">
   <div id="wres"></div>
-  ${LEVELS.map(lv => `<div class="sec between"><span class="eyebrow">${lv}</span></div>` + UNITS.filter(u => u.lv === lv).map(u => { const n = u.w.filter((_, i) => ST.cards[u.id + '-' + i]).length; return `<button class="card tap" data-unit="${u.id}" style="margin:6px 0"><div class="row"><span style="font-size:28px">${u.i}</span><div class="grow"><div class="h3">${esc(u.t)}</div><div class="fa" style="font-size:13px;color:var(--dim);text-align:left">${esc(u.fa)}</div></div><span class="xs">${n}/${u.w.length}</span></div><div class="bar" style="margin-top:8px;height:5px"><i style="width:${100 * n / u.w.length}%"></i></div></button>`; }).join('')).join('')}`;
+  ${LEVELS.map(lv => `<div class="sec between"><span class="eyebrow">${lv}</span></div>` + UNITS.filter(u => u.lv === lv).map(u => { const n = u.w.filter((_, i) => ST.cards[u.id + '-' + i]).length; return `<button class="card tap" data-unit="${u.id}" style="margin:6px 0"><div class="row"><span style="font-size:28px">${u.i}</span><div class="grow"><div class="h3">${esc(u.t)}</div><div class="fa" style="font-size:13px;color:var(--dim)">${esc(u.fa)}</div></div><span class="xs">${n}/${u.w.length}</span></div><div class="bar" style="margin-top:8px;height:5px"><i style="width:${100 * n / u.w.length}%"></i></div></button>`; }).join('')).join('')}`;
 }
 function vGrammar() {
   if (SUB && GMAP[SUB]) {
@@ -610,8 +729,8 @@ function vGrammar() {
     <div class="xs" style="text-align:center;margin-top:8px">${s ? `${s.ok}/${s.n} correct so far` : 'not practised yet'}</div>`;
   }
   const un = new Set(gramUnlocked().map(g => g.id));
-  return `<div class="eyebrow">grammar · دستور زبان</div><div class="h1">Grammar</div><div class="sm">${GRAMMAR.length} lessons in CEFR order. A new one opens as you move along the road; you can read any lesson.</div>
-  ${LEVELS.map(lv => `<div class="sec"><span class="eyebrow">${lv}</span></div><div class="card" style="padding:4px 14px">` + GRAMMAR.filter(g => g.lv === lv).map(g => `<button class="list-item" data-gram="${g.id}" style="width:100%;text-align:left"><span class="lvchip lv-${g.lv}">${GRAMMAR.indexOf(g) + 1}</span><div class="grow"><div style="font-weight:650">${esc(g.t)}</div><div class="fa" style="font-size:13px;color:var(--dim);text-align:left">${esc(g.fa)}</div></div><span>${gramLearned(g.id) ? '<span class="done-mark">✓</span>' : un.has(g.id) ? '🔓' : '🔒'}</span></button>`).join('') + '</div>').join('')}`;
+  return `${lab('grammar', 'دستور زبان')}<div class="h1">Grammar</div><div class="sm">${GRAMMAR.length} lessons in CEFR order. A new one opens as you move along the road; you can read any lesson.</div>
+  ${LEVELS.map(lv => `<div class="sec"><span class="eyebrow">${lv}</span></div><div class="card" style="padding:4px 14px">` + GRAMMAR.filter(g => g.lv === lv).map(g => `<button class="list-item" data-gram="${g.id}" style="width:100%;text-align:left"><span class="lvchip lv-${g.lv}">${GRAMMAR.indexOf(g) + 1}</span><div class="grow"><div style="font-weight:650">${esc(g.t)}</div><div class="fa" style="font-size:13px;color:var(--dim)">${esc(g.fa)}</div></div><span>${gramLearned(g.id) ? '<span class="done-mark">✓</span>' : un.has(g.id) ? '🔓' : '🔒'}</span></button>`).join('') + '</div>').join('')}`;
 }
 function vListen() {
   if (SUB && SUB.startsWith('u') && UMAP[SUB]) {
@@ -624,38 +743,45 @@ function vListen() {
     return `<button class="btn ghost sm inl" data-back>‹ Listening</button><div class="h2" style="margin-top:12px">Sounds for Persian speakers</div><div class="fa" style="color:var(--dim)">تلفظ‌هایی که برای فارسی‌زبان‌ها سخت است</div>
     ${SOUNDS.map(s => `<div class="card"><div class="h3">${esc(s.t)}</div><div class="fa" style="font-size:15px;margin-top:4px">${esc(s.fa2)}</div><div class="pairs">${s.p.map(p => `<button data-say="${esc(p[0])}">🔊 ${esc(p[0])}${p[1] && p[1] !== '—' ? `<div class="xs">${/✗|\//.test(p[1]) ? esc(p[1]) : 'vs ' + esc(p[1])}</div>` : ''}</button>${p[1] && p[1] !== '—' && !/✗|\//.test(p[1]) ? `<button data-say="${esc(p[1])}">🔊 ${esc(p[1])}</button>` : '<span></span>'}`).join('')}</div></div>`).join('')}`;
   }
-  return `<div class="eyebrow">listening · شنیداری</div><div class="h1">Listen</div>
+  return `${lab('listening', 'شنیداری')}<div class="h1">Listen</div>
   <button class="card tap glow" data-sub="sounds"><div class="row"><span style="font-size:30px">👄</span><div class="grow"><div class="h3">Sounds for Persian speakers</div><div class="xs">th, v/w, "eschool", ship/sheep, stress…</div></div><span>›</span></div></button>
   <div class="sec"><span class="eyebrow">stories & announcements · ${LISTEN.length}</span></div>
-  ${LISTEN.map(P => `<button class="card tap" data-pass="${P.id}" style="margin:6px 0"><div class="row">${lvChip(P.lv)}<div class="grow"><div class="h3">${esc(P.t)}</div><div class="fa" style="font-size:13px;color:var(--dim);text-align:left">${esc(P.fa)}</div></div><span class="xs">${ST.lis[P.id] ? '✓ ' + ST.lis[P.id].ok + '/' + ST.lis[P.id].n : '▶'}</span></div></button>`).join('')}
+  ${LISTEN.map(P => `<button class="card tap" data-pass="${P.id}" style="margin:6px 0"><div class="row">${lvChip(P.lv)}<div class="grow"><div class="h3">${esc(P.t)}</div><div class="fa" style="font-size:13px;color:var(--dim)">${esc(P.fa)}</div></div><span class="xs">${ST.lis[P.id] ? '✓ ' + ST.lis[P.id].ok + '/' + ST.lis[P.id].n : '▶'}</span></div></button>`).join('')}
   <div class="sec"><span class="eyebrow">dialogues · ${UNITS.length}</span></div>
   ${UNITS.map(u => `<button class="card tap" data-dlg="${u.id}" style="margin:6px 0"><div class="row">${lvChip(u.lv)}<div class="grow"><div class="h3">${u.i} ${esc(u.d.t)}</div><div class="xs">${esc(u.t)}</div></div><span class="xs">${ST.dlg[u.id] ? '<span class="done-mark">✓</span>' : '▶'}</span></div></button>`).join('')}`;
 }
 function vRoad() {
-  return `<div class="eyebrow">roadmap · نقشهٔ راه</div><div class="h1">Road to C2</div><div class="fa" style="color:var(--dim);font-size:15px">از صفر تا سطح C2 (چارچوب اروپایی CEFR). هر سطح با واژگان، دستور، مکالمه و شنیداری کامل می‌شود.</div>
+  const L = nextLesson(), cur = L ? L.lv : 'C2', open = ROAD_OPEN || cur, gl = GRAMMAR.filter(g => gramLearned(g.id)).length;
+  return `${lab('roadmap', 'نقشهٔ راه')}<div class="h1">Road to C2</div><div class="fa" style="color:var(--dim);font-size:15px">از صفر تا سطح C2 (چارچوب اروپایی CEFR). هر سطح با واژگان، دستور، مکالمه و شنیداری کامل می‌شود.</div>
+  ${progressCard()}
+  <div class="card"><div class="row"><div class="stat"><b>${gl}<small> / ${GRAMMAR.length}</small></b><span class="xs">grammar lessons</span><span class="xs fa c">درس دستور</span></div><div class="stat"><b>${UNITS.filter(u => ST.dlg[u.id]).length}<small> / ${UNITS.length}</small></b><span class="xs">dialogues</span><span class="xs fa c">مکالمه</span></div></div>
+    <div class="sm" style="margin-top:12px">Daily pace: 30 new words a day until the end of B1, then 20 a day until the end of C2.${L ? ' At this pace, about ' + fmt(daysLeft()) + ' days to finish C2.' : ''}</div>
+    <div class="fa sm" style="margin-top:4px">برنامهٔ روزانه: تا پایان B1 روزی ۳۰ واژهٔ جدید، و بعد تا پایان C2 روزی ۲۰ واژه.${L ? ' با این سرعت حدود ' + faNum(daysLeft()) + ' روز تا پایان C2.' : ''}</div>
+    ${L ? `<button class="btn" id="daily" style="margin-top:14px">▶ Continue · lesson ${lessonIdx(L) + 1}</button>` : ''}</div>
   <div class="road" style="margin-top:14px">${ROAD.map(r => {
-    const s = levelStats(r.lv), done = s.pct >= .9;
-    return `<div class="card lv-${r.lv} ${done ? 'done' : ''}"><div class="between"><div><span class="lvchip lv-${r.lv}" style="font-size:13px">${r.lv}</span> <b>${esc(r.t)}</b> <span class="fa" style="color:var(--dim)">· ${esc(r.fa)}</span></div>${done ? '<span class="done-mark">✓</span>' : ''}</div>
+    const s = levelStats(r.lv), done = s.pct >= .9, Ls = LESSONS.filter(x => x.lv === r.lv), ld = Ls.filter(lessonDone).length, isOpen = open === r.lv;
+    return `<div class="card lv-${r.lv} ${done ? 'done' : ''}">
+    <button class="lvhead" data-lvl="${r.lv}"><div class="between"><div class="row"><span class="lvchip lv-${r.lv}" style="font-size:13px">${r.lv}</span><b>${esc(r.t)}</b></div><span>${done ? '<span class="done-mark">✓</span>' : r.lv === cur ? '<span class="chip blue">you are here</span>' : ''} ${isOpen ? '▾' : '▸'}</span></div>
+    <div class="fa" style="color:var(--dim);font-size:14px;margin-top:2px">${esc(r.fa)}</div>
     <div class="bar ${done ? 'gold' : ''}" style="margin-top:10px"><i style="width:${Math.round(100 * s.pct)}%"></i></div>
-    <div class="xs" style="margin-top:6px">${s.sw}/${s.ws} words met · ${s.kg}/${s.gs} grammar · ${s.dl}/${s.us} dialogues · about ${r.hours} study hours</div>
-    <div class="eyebrow" style="margin-top:12px">you will be able to · خواهید توانست</div>${r.can.map(c => `<div class="rule"><div>✔︎ ${esc(c[0])}</div><div class="fa" style="color:var(--dim);font-size:14px">${esc(c[1])}</div></div>`).join('')}
-    <div class="eyebrow" style="margin-top:10px">outside the app · بیرون از برنامه</div>${r.out.map(c => `<div class="rule"><div>• ${esc(c[0])}</div><div class="fa" style="color:var(--dim);font-size:14px">${esc(c[1])}</div></div>`).join('')}</div>`;
+    <div class="xs" style="margin-top:6px">${ld}/${Ls.length} lessons · ${s.sw}/${s.ws} words · ${s.kg}/${s.gs} grammar · ${s.dl}/${s.us} dialogues · about ${r.hours} study hours</div></button>
+    ${isOpen ? `<div class="lessons">${Ls.map(x => { const u = UMAP[x.u], d = lessonDone(x), now = x === L; return `<button class="lsn ${d ? 'd' : ''} ${now ? 'now' : ''}" data-lsn="${x.u}"><span class="n">${lessonIdx(x) + 1}</span><span class="grow"><span class="t">${u.i} ${esc(lessonTitle(x))}</span><span class="fa xs">${esc(u.fa)}</span></span><span class="xs">${d ? '<span class="done-mark">✓</span>' : now ? '▶' : x.words.filter(id => ST.cards[id]).length + '/' + x.words.length}</span></button>`; }).join('')}</div>
+    <details style="margin-top:12px"><summary class="eyebrow">you will be able to</summary><div class="fa eyfa">خواهید توانست</div>${r.can.map(c => `<div class="rule"><div>✔︎ ${esc(c[0])}</div><div class="fa" style="color:var(--dim);font-size:14px">${esc(c[1])}</div></div>`).join('')}
+    <div style="margin-top:10px">${lab('outside the app', 'بیرون از برنامه')}</div>${r.out.map(c => `<div class="rule"><div>• ${esc(c[0])}</div><div class="fa" style="color:var(--dim);font-size:14px">${esc(c[1])}</div></div>`).join('')}</details>` : ''}</div>`;
   }).join('')}</div>
-  <div class="card"><div class="h3">Honest note · یادداشت صادقانه</div><div class="sm" style="margin-top:4px">The app covers the vocabulary, grammar, listening and pronunciation core for each level. Real C1–C2 also needs free conversation with people and corrected writing — plan those from B1 onwards.</div><div class="fa" style="margin-top:6px;font-size:14px;color:var(--dim)">این برنامه هستهٔ واژگان، دستور، شنیداری و تلفظ هر سطح را پوشش می‌دهد. برای C1 و C2 واقعی، مکالمهٔ آزاد با افراد و نوشتن با تصحیح هم لازم است؛ از سطح B1 آن‌ها را برنامه‌ریزی کنید.</div></div>`;
+  <div class="card"><div class="h3">Honest note</div><div class="fa" style="font-size:14px;color:var(--dim)">یادداشت صادقانه</div><div class="sm" style="margin-top:6px">The app covers the vocabulary, grammar, listening and pronunciation core for each level. Real C1–C2 also needs free conversation with people and corrected writing — plan those from B1 onwards.</div><div class="fa" style="margin-top:6px;font-size:14px;color:var(--dim)">این برنامه هستهٔ واژگان، دستور، شنیداری و تلفظ هر سطح را پوشش می‌دهد. برای C1 و C2 واقعی، مکالمهٔ آزاد با افراد و نوشتن با تصحیح هم لازم است؛ از سطح B1 آن‌ها را برنامه‌ریزی کنید.</div></div>`;
 }
 function vYou() {
-  const vs = VOICES.slice().sort((a, b) => voiceScore(b, ST.accent, null) - voiceScore(a, ST.accent, null));
-  const pref = S.get('en.voice', '');
-  return `<div class="eyebrow">profile · نمایه</div><div class="row" style="margin-top:6px"><span class="av" style="width:56px;height:56px;font-size:24px">${esc(ME.name[0].toUpperCase())}</span><div class="grow"><div class="h2">${esc(ME.name)} ${ME.owner ? '<span class="chip gold">OWNER</span>' : ''}</div><div class="xs">${seenWords().length} words · ${GRAMMAR.filter(g => gramLearned(g.id)).length} grammar lessons · best streak ${ST.streak.best || 0} days</div></div></div>
-  <div class="sec"><span class="eyebrow">daily new words</span></div><div class="card"><div class="seg">${[4, 6, 8].map(n => `<button data-per="${n}" class="${ST.perDay === n ? 'on' : ''}">${n} words · ${n === 4 ? '10' : n === 6 ? '15' : '20'} min</button>`).join('')}</div></div>
-  <div class="sec"><span class="eyebrow">voice · صدا</span></div><div class="card">
-    <div class="seg"><button data-acc="GB" class="${ST.accent === 'GB' ? 'on' : ''}">🇬🇧 British</button><button data-acc="US" class="${ST.accent === 'US' ? 'on' : ''}">🇺🇸 American</button></div>
+  return `${lab('profile', 'نمایه')}<div class="row" style="margin-top:6px"><span class="av" style="width:56px;height:56px;font-size:24px">${esc(ME.name[0].toUpperCase())}</span><div class="grow"><div class="h2">${esc(ME.name)} ${ME.owner ? '<span class="chip gold">OWNER</span>' : ''}</div><div class="xs">${seenWords().length} words · ${GRAMMAR.filter(g => gramLearned(g.id)).length} grammar lessons · best streak ${ST.streak.best || 0} days</div></div></div>
+  <div class="sec">${lab('daily pace', 'برنامهٔ روزانه')}</div><div class="card"><div class="sm">30 new words a day until the end of B1, then 20 a day until the end of C2, in sessions of up to ${SESSION_NEW} new words. Today: ${Math.min(newToday(), dayTarget())} / ${dayTarget()}.</div><div class="fa sm" style="margin-top:4px">تا پایان B1 روزی ۳۰ واژه، سپس تا پایان C2 روزی ۲۰ واژه؛ هر جلسه حداکثر ${faNum(SESSION_NEW)} واژهٔ جدید.</div></div>
+  <div class="sec">${lab('voice', 'صدا')}</div><div class="card">
+    <div class="sm">American voices, recorded with high-quality neural voices. Tap one to hear it.</div><div class="fa sm" style="margin-top:2px">صداهای آمریکایی ضبط‌شده با کیفیت بالا. برای شنیدن روی هر کدام بزنید.</div>
+    <div class="xs" style="margin-top:12px">Women</div><div class="xs fa">زن</div><div class="seg">${VOICE_LIST.filter(x => x[2] === 'f').map(x => `<button data-voice="${x[0]}" class="${mainVoice() === x[0] ? 'on' : ''}">👩 ${x[1]}</button>`).join('')}</div>
+    <div class="xs" style="margin-top:10px">Men</div><div class="xs fa">مرد</div><div class="seg">${VOICE_LIST.filter(x => x[2] === 'm').map(x => `<button data-voice="${x[0]}" class="${mainVoice() === x[0] ? 'on' : ''}">👨 ${x[1]}</button>`).join('')}</div>
     <div class="sm" style="margin-top:12px">Speed</div>${speedSeg()}
-    <div class="sm" style="margin-top:12px">Voice on this phone</div>
-    <select id="vsel" class="typebox" style="text-align:left;font-size:14px;margin-top:6px"><option value="">Automatic (best ${ST.accent === 'GB' ? 'British' : 'American'} voice)</option>${vs.map(v => `<option value="${esc(v.voiceURI)}" ${pref === v.voiceURI ? 'selected' : ''}>${esc(v.name)} · ${esc(v.lang)}</option>`).join('')}</select>
     <button class="btn ghost sm" id="vtest" style="margin-top:10px">🔊 Test: "Hello, nice to meet you."</button>
-    <div class="xs" style="margin-top:8px">${VOICES.length} English voices found${SPEECH_ERR ? ' · last error: ' + esc(SPEECH_ERR) : ''}. Better voices: iPhone Settings → Accessibility → Spoken Content → Voices → English → download an "Enhanced" voice (e.g. Serena or Daniel). If you hear nothing, turn off silent mode and turn the volume up.</div>
-    <div class="fa" style="font-size:13px;color:var(--dim);margin-top:6px">برای صدای بهتر: تنظیمات آیفون ← Accessibility ← Spoken Content ← Voices ← English و یک صدای Enhanced دانلود کنید.</div></div>
+    <div class="xs" style="margin-top:8px">Recordings: ${AKEYS ? fmt(AKEYS.size) + ' phrases ready' : esc(AKEY_STATE || 'not loaded')} · voice ${esc(voiceName(mainVoice()))}${AVOICE[mainVoice()] && AVOICE[mainVoice()].d ? ' ready' : ' loading'}${AUDIO_ERR ? ' · last problem: ' + esc(AUDIO_ERR) : ''}. Dialogues use a woman's and a man's voice by speaker. If you hear nothing, turn off silent mode and turn the volume up.</div>
+    <div class="fa" style="font-size:13px;color:var(--dim);margin-top:6px">در مکالمه‌ها هر گوینده با صدای زن یا مرد خودش پخش می‌شود. اگر صدایی نمی‌شنوید، حالت بی‌صدا را خاموش و صدا را زیاد کنید.</div></div>
   ${ME.owner ? ownerCard() : ''}
   <div class="sec"><span class="eyebrow">app & backup</span></div><div class="card">
     <div class="between"><div><div class="h3">Version</div><div class="xs">${esc(BUILD)}</div></div><button class="btn ghost sm inl" id="chk">Check for update</button></div>
@@ -676,7 +802,7 @@ function ownerCard() {
 }
 function sendInvite(name) {
   const code = inviteCode(name), link = location.origin + location.pathname.replace(/[^/]*$/, '');
-  const text = `Hi ${name}! 👋\nYou're invited to our English app (A1 → C2), made for Persian speakers.\nسلام ${name}! به اپلیکیشن آموزش انگلیسی ما دعوت شده‌ای.\n\n1. Open this link in Safari / این لینک را در Safari باز کن:\n${link}\n2. Share → Add to Home Screen / Share ← Add to Home Screen\n3. Tap "I have an invitation code" and enter:\n   Name / نام: ${name}\n   Code / کد: ${code}\n\nGood luck! موفق باشی!`;
+  const text = `Hi ${name}! 👋\nYou're invited to our English app (A1 → C2), made for Persian speakers.\nسلام ${name}! به اپلیکیشن آموزش انگلیسی ما دعوت شده‌ای.\n\n1. Open this link in Safari:\nاین لینک را در Safari باز کن:\n${link}\n\n2. Tap Share, then Add to Home Screen.\nروی Share و بعد Add to Home Screen بزن.\n\n3. Tap "I have an invitation code" and enter:\nروی «کد دعوت دارم» بزن و این‌ها را وارد کن:\nName: ${name}\nCode: ${code}\n\nGood luck!\nموفق باشی!`;
   if (navigator.share) navigator.share({ title: 'English app invitation', text }).catch(() => { });
   else { const a = el('a'); a.href = 'sms:?&body=' + encodeURIComponent(text); document.body.appendChild(a); a.click(); a.remove(); }
   try { navigator.clipboard && navigator.clipboard.writeText(text); } catch (e) { }
@@ -698,10 +824,10 @@ function bind(a) {
   on('[data-dplay]', b => playDialogue(UMAP[b.dataset.dplay], $('#dscope')));
   on('[data-dtest]', b => { const u = UMAP[b.dataset.dtest]; stopSpeech(); DLG_RUN++; startSession(u.d.q.map((_, k) => dlgQuestion(u, k)), u.d.t); });
   on('[data-pass]', b => { const P = LISTEN.find(x => x.id === b.dataset.pass); startSession([passageCard(P), ...P.q.map((_, k) => passageQ(P, k))], P.t); });
-  on('[data-per]', b => { ST.perDay = +b.dataset.per; save(); render(); });
-  on('[data-acc]', b => { ST.accent = b.dataset.acc; S.del('en.voice'); save(); render(); say('Hello, nice to meet you.'); });
+  on('[data-voice]', b => { ST.voice = b.dataset.voice; save(); loadVoice(ST.voice); render(); say('Hello, nice to meet you.', { v: ST.voice }); });
+  on('[data-lvl]', b => { const L = nextLesson(), cur = L ? L.lv : 'C2', open = ROAD_OPEN || cur; ROAD_OPEN = open === b.dataset.lvl ? 'none' : b.dataset.lvl; render(); });
+  on('[data-lsn]', b => { TAB = 'words'; SUB = b.dataset.lsn; render(); window.scrollTo(0, 0); });
   bindSpeed(a);
-  const vs = a.querySelector('#vsel'); if (vs) vs.onchange = () => { if (vs.value) S.set('en.voice', vs.value); else S.del('en.voice'); say('Hello, nice to meet you.'); };
   on('#vtest', () => say('Hello, nice to meet you.'));
   on('#chk', () => checkUpdate(true));
   on('#sw', () => { saveNow(); ME = null; boot(); });
@@ -733,10 +859,10 @@ function boot() {
 }
 function setupUI() {
   gate(`<div class="eyebrow">english · a1 → c2</div><div style="font-size:64px;margin:18px 0 4px">🇬🇧</div>
-    <h1 class="h1" style="font-size:32px">Welcome!</h1><div class="fa" style="font-size:18px;text-align:left;direction:rtl">به اپلیکیشن آموزش انگلیسی خوش آمدید</div>
+    <h1 class="h1" style="font-size:32px">Welcome!</h1><div class="fa" style="font-size:18px">به اپلیکیشن آموزش انگلیسی خوش آمدید</div>
     <p class="sm" style="margin:10px 0 26px">English for Persian speakers, from the very first word to C2.</p>
-    <button class="btn" id="join">I have an invitation code · کد دعوت دارم</button>
-    <button class="btn line" id="own" style="margin-top:12px">I'm the owner · مالک برنامه هستم</button>`);
+    <button class="btn" id="join"><div>I have an invitation code</div><div class="fa c" style="font-weight:600;font-size:14px">کد دعوت دارم</div></button>
+    <button class="btn line" id="own" style="margin-top:12px"><div>I'm the owner</div><div class="fa c" style="font-weight:600;font-size:14px">مالک برنامه هستم</div></button>`);
   $('#own').onclick = ownerUI; $('#join').onclick = joinUI;
 }
 function ownerUI() {
@@ -756,7 +882,7 @@ function ownerUI() {
 }
 function joinUI() {
   gate(`<h1 class="h1">Join with your invitation</h1><p class="sm" style="margin:6px 0 4px">Enter your name and code exactly as in the message you received.</p>
-    <div class="fa" style="font-size:14px;color:var(--dim);margin-bottom:16px;text-align:left;direction:rtl">نام و کد را دقیقاً مثل پیام دعوت وارد کنید.</div>
+    <div class="fa" style="font-size:14px;color:var(--dim);margin-bottom:16px">نام و کد را دقیقاً مثل پیام دعوت وارد کنید.</div>
     <input class="typebox" id="jn" placeholder="your name (as in the message)" style="text-align:left;font-size:16px;margin-bottom:10px">
     <input class="typebox" id="jc" placeholder="A1234" autocapitalize="characters" autocomplete="off" maxlength="5" style="font-size:22px;letter-spacing:.3em;margin-bottom:16px">
     <button class="btn" id="jgo">Unlock my profile</button><button class="btn line" id="jback" style="margin-top:10px">Back</button>`);
@@ -776,7 +902,7 @@ function welcomeUI(p) {
   const st = S.get('en.' + p.id + '.state', null), started = st && st.cards && Object.keys(st.cards).length;
   gate(`<div class="eyebrow">english · a1 → c2</div><div style="text-align:center;margin:24px 0 6px"><span class="av" style="width:84px;height:84px;font-size:36px;border-radius:26px">${esc(p.name[0].toUpperCase())}</span></div>
     <h1 class="h1" style="text-align:center;font-size:30px">${started ? 'Welcome back' : 'Welcome'}, ${esc(p.name)}! 👋</h1>${p.owner ? '<div style="text-align:center"><span class="chip gold">OWNER</span></div>' : ''}
-    <p class="sm" style="text-align:center;margin:8px 0 26px">${started ? Object.keys(st.cards).length + ' words met so far' : 'Your road to C2 starts today · سفر شما تا C2 از امروز شروع می‌شود'}</p>
+    <p class="sm" style="text-align:center;margin:8px 0 26px">${started ? Object.keys(st.cards).length + ' words met so far' : 'Your road to C2 starts today<div class="fa c" style="margin-top:4px">سفر شما تا C2 از امروز شروع می‌شود</div>'}</p>
     <button class="btn" id="cont">${started ? 'Continue learning →' : 'Start learning →'}</button>
     ${PROFILES.length > 1 ? '<button class="btn line" id="nyou" style="margin-top:12px">Not you? Switch learner</button>' : ''}
     <button class="btn ghost" id="join2" style="margin-top:10px">I have an invitation code</button>`);
@@ -791,7 +917,8 @@ function chooserUI() {
 }
 function enter(p) {
   ME = p; ST = loadState(p.id); S.set('en.primary', p.id);
-  $('#gate').style.display = 'none'; $('#app').style.display = 'block'; TAB = 'today'; SUB = null; render();
+  $('#gate').style.display = 'none'; $('#app').style.display = 'block'; TAB = 'road'; SUB = null; ROAD_OPEN = null;
+  loadKeys(); loadVoice(mainVoice()); loadVoice(genderVoice(mainVoice()[0] !== 'm')); render();
   audioSession(); loadVoices();
 }
 
