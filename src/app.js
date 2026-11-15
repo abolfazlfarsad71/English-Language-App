@@ -1,6 +1,6 @@
 'use strict';
 /* English for Persian speakers — A1 → C1. One-file web app (built by build.mjs). */
-const BUILD = '15 nov · b8';
+const BUILD = '15 nov · b9';
 const DAY = 864e5;
 
 /* ------------------------------ data ------------------------------ */
@@ -71,7 +71,7 @@ function pic(w, big) {
   return big ? `<div class="stage"><div class="pic3d tile"><span>${L}</span></div></div>` : `<span class="mini tile">${L}</span>`;
 }
 const lvChip = lv => `<span class="lvchip lv-${lv}">${lv}</span>`;
-const POS = { n: 'noun · اسم', v: 'verb · فعل', adj: 'adjective · صفت', adv: 'adverb · قید', prep: 'preposition · حرف اضافه', conj: 'conjunction · حرف ربط', phr: 'phrase · عبارت', num: 'number · عدد' };
+const POS = { n: 'noun · اسم', v: 'verb · فعل', adj: 'adjective · صفت', adv: 'adverb · قید', prep: 'preposition · حرف اضافه', conj: 'conjunction · حرف ربط', phr: 'phrase · عبارت', num: 'number · عدد', idiom: 'idiom · اصطلاح', det: 'determiner · معرف', pron: 'pronoun · ضمیر' };
 
 /* ------------------------------ speech ------------------------------ */
 // Phone voices (offline, free). Lessons learned on iOS: start speech synchronously inside the tap,
