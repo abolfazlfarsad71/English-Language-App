@@ -6,13 +6,13 @@ home screen from Safari. Built on the model of the Dutch app (`abolfazlfarsad71/
 
 **Open:** https://abolfazlfarsad71.github.io/English-Language-App/
 
-## What is inside (build b2)
-- **Road to C1:** 30 topic units (A1 8 · A2 7 · B1 6 · B2 5 · C1 4), each split into 2 lessons → 60 lessons.
-- **480 words** with Farsi meaning, English synonyms, a practical example sentence + Farsi translation, and an
+## What is inside (build b10)
+- **Road to C1:** 263 topic units (A1 28 · A2 36 · B1 57 · B2 108 · C1 34), split into 8-word lessons.
+- **5,422 words and phrases** (about 900 idioms) with Farsi meaning, English synonyms, a practical example sentence + Farsi translation, and an
   emoji only where it shows exactly the word (others get a clean letter tile). New-word card floats in 3-D.
-- **30 grammar lessons** in CEFR order, rules in English + Farsi, 6–7 examples, 8 drills, and a
+- **45 grammar lessons** in CEFR order, rules in English + Farsi, 6–7 examples, 8 drills, and a
   "tip for Persian speakers" on the typical mistake (articles, word order, he/she -s, mustn't vs don't have to…).
-- **30 daily-life dialogues** (8 lines, two speakers, Farsi under each line) with comprehension questions,
+- **263 daily-life dialogues** (4–8 lines, two speakers, Farsi under each line) with comprehension questions,
   **12 listening stories** A1→C1, and **Sounds for Persian speakers** (th, v/w, "eschool", ship/sheep, stress…).
 - **Daily lesson:** mistakes first → reviews (spaced repetition) → new words with checks → grammar every day →
   cloze practice → the unit dialogue heard blind when a unit is finished. Wrong answers come back 3 cards later and
@@ -49,6 +49,11 @@ All texts, dialogues and exercises are original, written for this app. The refer
 copyrighted and are **not** copied into this public repository.
 
 ## Change log
+- **b3–b10 (15 nov)** — pen-blue and white theme with light gold for trophies and finished levels; content grown
+  from 480 to 5,422 words: all units of Vocabulary in Use, Business Vocabulary in Use, the six 4000 Essential Words
+  books (about 97% of their headwords) and all 62 units of English Idioms in Use (read from the scanned pages),
+  each as original examples, dialogues and questions; grammar extended to 45 lessons spread across each level;
+  US spellings shown in British form; unit road ordered by level.
 - **b2 (15 nov)** — full review: ~25 Farsi translations and 5 dialogue lines corrected; duplicate words removed
   (bill, account, deadline, budget, bottom line); 13 emojis removed or replaced where they did not show the exact word
   (including literal pictures on idioms); 4 drawn pictures (solar panel, wind turbine, pylon, battery storage).
