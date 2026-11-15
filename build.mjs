@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 const rd = p => readFileSync(new URL(p, import.meta.url), 'utf8');
 const J = p => JSON.parse(rd(p));
-const units = ['a1', 'a2', 'b1', 'b2', 'c1'].flatMap(l => J(`src/data/units-${l}.json`));
+const units = ['a1', 'a2', 'b1', 'b2', 'c1', 'c2'].flatMap(l => J(`src/data/units-${l}.json`));
 const grammar = ['a', 'b', 'c'].flatMap(l => J(`src/data/grammar-${l}.json`));
 const extra = J('src/data/extra.json');
 // sanity checks: stable ids, every drill has 3 options, every dialogue question 3 options

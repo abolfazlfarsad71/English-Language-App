@@ -49,7 +49,7 @@ input,textarea,select{font:inherit;color:inherit}
 .chip.gold{background:var(--goldgrad);color:#5A430A;box-shadow:0 2px 8px rgba(226,190,90,.35)}
 .chip.mint{background:var(--mint-d);color:var(--mint)}
 .chip.blue{background:var(--ink-d);color:var(--ink)}
-.lv-A1{--lc:#2F9E6B}.lv-A2{--lc:#1F8A9E}.lv-B1{--lc:#2F5BD3}.lv-B2{--lc:#6A4FD0}.lv-C1{--lc:#A9821C}
+.lv-A1{--lc:#2F9E6B}.lv-A2{--lc:#1F8A9E}.lv-B1{--lc:#2F5BD3}.lv-B2{--lc:#6A4FD0}.lv-C1{--lc:#A9821C}.lv-C2{--lc:#0F2A6B}
 .lvchip{display:inline-block;min-width:34px;text-align:center;padding:3px 8px;border-radius:9px;font-size:11px;font-weight:900;color:var(--lc);background:color-mix(in srgb,var(--lc) 12%,white)}
 .typebox{width:100%;padding:14px 16px;border-radius:14px;border:1.5px solid var(--line2);background:#fff;outline:none;font-size:17px;text-align:center}
 .typebox:focus{border-color:var(--ink2);box-shadow:0 0 0 3px rgba(47,91,211,.15)}

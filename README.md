@@ -1,19 +1,19 @@
-# English — A1 → C1 (for Persian speakers)
+# English — A1 → C2 (for Persian speakers)
 
-Private phone web app that teaches English to native Persian (Farsi) speakers, from the first word to C1.
+Private phone web app that teaches English to native Persian (Farsi) speakers, from the first word to C2.
 Lessons are in English with precise Farsi translations. Served by GitHub Pages and added to the iPhone
 home screen from Safari. Built on the model of the Dutch app (`abolfazlfarsad71/nederlands`), improved.
 
 **Open:** https://abolfazlfarsad71.github.io/English-Language-App/
 
-## What is inside (build b10)
-- **Road to C1:** 263 topic units (A1 28 · A2 36 · B1 57 · B2 108 · C1 34), split into 8-word lessons.
-- **5,422 words and phrases** (about 900 idioms) with Farsi meaning, English synonyms, a practical example sentence + Farsi translation, and an
+## What is inside (build b11)
+- **Road to C2:** 292 topic units (A1 28 · A2 38 · B1 60 · B2 90 · C1 56 · C2 20), split into 8-word lessons; idiom units alternate with topic units.
+- **5,680 words and phrases** (about 920 idioms) with Farsi meaning, English synonyms, a practical example sentence + Farsi translation, and an
   emoji only where it shows exactly the word (others get a clean letter tile). New-word card floats in 3-D.
-- **45 grammar lessons** in CEFR order, rules in English + Farsi, 6–7 examples, 8 drills, and a
+- **56 grammar lessons** in CEFR order, rules in English + Farsi, 6–7 examples, 8 drills, and a
   "tip for Persian speakers" on the typical mistake (articles, word order, he/she -s, mustn't vs don't have to…).
-- **263 daily-life dialogues** (4–8 lines, two speakers, Farsi under each line) with comprehension questions,
-  **12 listening stories** A1→C1, and **Sounds for Persian speakers** (th, v/w, "eschool", ship/sheep, stress…).
+- **292 daily-life dialogues** (4–8 lines, two speakers, Farsi under each line) with comprehension questions,
+  **14 listening stories** A1→C2, and **Sounds for Persian speakers** (th, v/w, "eschool", ship/sheep, stress…).
 - **Daily lesson:** mistakes first → reviews (spaced repetition) → new words with checks → grammar every day →
   cloze practice → the unit dialogue heard blind when a unit is finished. Wrong answers come back 3 cards later and
   stay in "your mistakes" until answered right in two later sessions.
@@ -49,6 +49,10 @@ All texts, dialogues and exercises are original, written for this app. The refer
 copyrighted and are **not** copied into this public repository.
 
 ## Change log
+- **b11 (15 nov)** — new C2 level (20 units, 5 grammar lessons, 2 listening texts, road entry); 6 grammar gaps filled
+  (subject/object questions, movement prepositions, zero conditional & time clauses, phrasal verbs, quantifiers,
+  articles in depth); 86 more Essential Words words and 16 more Idioms in Use idioms; idiom units spread through B2–C1;
+  full re-read of all word meanings, example sentences and dialogue lines (about 70 corrections).
 - **b3–b10 (15 nov)** — pen-blue and white theme with light gold for trophies and finished levels; content grown
   from 480 to 5,422 words: all units of Vocabulary in Use, Business Vocabulary in Use, the six 4000 Essential Words
   books (about 97% of their headwords) and all 62 units of English Idioms in Use (read from the scanned pages),

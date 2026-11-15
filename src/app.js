@@ -1,13 +1,13 @@
 'use strict';
-/* English for Persian speakers — A1 → C1. One-file web app (built by build.mjs). */
-const BUILD = '15 nov · b10';
+/* English for Persian speakers — A1 → C2. One-file web app (built by build.mjs). */
+const BUILD = '15 nov · b11';
 const DAY = 864e5;
 
 /* ------------------------------ data ------------------------------ */
 const UNITS = DATA.units;                 // [{id,lv,t,fa,i,w:[[w,pos,fa,syn,ex,exfa,emoji]],d:{...}}]
 const GRAMMAR = DATA.grammar;             // [{id,lv,t,fa,r,ex,tip,d:[[q,correct,wrong,wrong]]}]
 const LISTEN = DATA.extra.listen, SOUNDS = DATA.extra.sounds, ROAD = DATA.extra.road;
-const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1'];
+const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const WORDS = [];                         // flat list, id = unit-index (stable key in saved progress)
 const WMAP = {};
 UNITS.forEach(u => u.w.forEach((a, i) => {
@@ -195,7 +195,7 @@ function levelStats(lv) {
   const pct = (sw / ws.length) * .45 + (kw / ws.length) * .2 + (kg / gs.length) * .25 + (dl / us.length) * .1;
   return { ws: ws.length, kw, sw, gs: gs.length, kg, us: us.length, dl, pct };
 }
-function curLevel() { for (const lv of LEVELS) { const s = levelStats(lv); if (s.pct < .9) return { lv, pct: s.pct }; } return { lv: 'C1', pct: 1 }; }
+function curLevel() { for (const lv of LEVELS) { const s = levelStats(lv); if (s.pct < .9) return { lv, pct: s.pct }; } return { lv: 'C2', pct: 1 }; }
 function markDay(n) {
   const d = today(); ST.days[d] = (ST.days[d] || 0) + n;
   if (ST.streak.last !== d) {
@@ -472,7 +472,7 @@ function endSession(aborted) {
 }
 function nextHint() {
   const due = dueList(Date.now() + DAY).length, L = nextLesson();
-  return `${due} words come back for review within 24 hours. ` + (L ? `Next lesson: ${lessonTitle(L)} (${L.lv}).` : 'You have finished the whole road to C1 — keep reviewing!');
+  return `${due} words come back for review within 24 hours. ` + (L ? `Next lesson: ${lessonTitle(L)} (${L.lv}).` : 'You have finished the whole road to C2 — keep reviewing!');
 }
 
 /* ------------------------------ building sessions ------------------------------ */
@@ -571,14 +571,14 @@ function ring(p, label) {
 function vToday() {
   const L = nextLesson(), due = dueList().length, cl = curLevel(), g = nextGrammar(), mc = missCount(), st = streakNow();
   const hr = new Date().getHours(), greet = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
-  return `<div class="between"><div><div class="eyebrow">english · a1 → c1</div><div class="h1">${greet}, ${esc(ME.name)}!</div></div><div class="chip gold">🔥 ${st}</div></div>
+  return `<div class="between"><div><div class="eyebrow">english · a1 → c2</div><div class="h1">${greet}, ${esc(ME.name)}!</div></div><div class="chip gold">🔥 ${st}</div></div>
   <button class="card tap glow" id="daily" style="margin-top:14px">
     <div class="eyebrow">today's lesson · درس امروز</div>
     <div class="between" style="margin-top:6px"><div class="grow"><div class="h2">${L ? UMAP[L.u].i + ' ' + esc(lessonTitle(L)) : '🏁 Review & keep fluent'}</div>
     ${L ? `<div class="fa" style="text-align:left;font-size:14px;color:var(--dim)">${esc(UMAP[L.u].fa)}</div>` : ''}<div class="sm">${due} reviews · ${L ? L.words.filter(id => !ST.cards[id]).length + ' new words · ' : ''}grammar${g ? ': ' + esc(g.t) : ' review'}</div></div><span class="say big" style="pointer-events:none">▶</span></div>
   </button>
   ${mc ? `<button class="card tap" id="miss"><div class="between"><div><div class="eyebrow" style="color:var(--coral)">your mistakes · اشتباهات</div><div class="h3" style="margin-top:4px">${mc} question${mc > 1 ? 's' : ''} to master</div><div class="xs">They also open your next daily lessons until you get them right again.</div></div><span style="font-size:28px">🎯</span></div></button>` : ''}
-  <div class="card"><div class="row">${ring(cl.pct, cl.lv)}<div class="grow"><div class="eyebrow">your level</div><div class="h3">${Math.round(cl.pct * 100)}% through ${cl.lv}</div><div class="bar" style="margin-top:8px"><i style="width:${Math.round(100 * lessonsDone() / LESSONS.length)}%"></i></div><div class="xs" style="margin-top:4px">Lesson ${Math.min(LESSONS.length, lessonsDone() + 1)} of ${LESSONS.length} on the road to C1</div></div></div></div>
+  <div class="card"><div class="row">${ring(cl.pct, cl.lv)}<div class="grow"><div class="eyebrow">your level</div><div class="h3">${Math.round(cl.pct * 100)}% through ${cl.lv}</div><div class="bar" style="margin-top:8px"><i style="width:${Math.round(100 * lessonsDone() / LESSONS.length)}%"></i></div><div class="xs" style="margin-top:4px">Lesson ${Math.min(LESSONS.length, lessonsDone() + 1)} of ${LESSONS.length} on the road to C2</div></div></div></div>
   <div class="row"><button class="card tap grow" id="qr" style="margin:0"><div style="font-size:24px">⚡</div><div class="h3">Quick review</div><div class="xs">${seenWords().length} words met</div></button>
   <button class="card tap grow" id="gl" style="margin:0"><div style="font-size:24px">🎧</div><div class="h3">Listening</div><div class="xs">${UNITS.filter(u => ST.dlg[u.id]).length} dialogues done</div></button></div>
   <div class="card"><div class="eyebrow">this week</div>${weekBars()}</div>`;
@@ -632,7 +632,7 @@ function vListen() {
   ${UNITS.map(u => `<button class="card tap" data-dlg="${u.id}" style="margin:6px 0"><div class="row">${lvChip(u.lv)}<div class="grow"><div class="h3">${u.i} ${esc(u.d.t)}</div><div class="xs">${esc(u.t)}</div></div><span class="xs">${ST.dlg[u.id] ? '<span class="done-mark">✓</span>' : '▶'}</span></div></button>`).join('')}`;
 }
 function vRoad() {
-  return `<div class="eyebrow">roadmap · نقشهٔ راه</div><div class="h1">Road to C1</div><div class="fa" style="color:var(--dim);font-size:15px">از صفر تا سطح C1 (چارچوب اروپایی CEFR). هر سطح با واژگان، دستور، مکالمه و شنیداری کامل می‌شود.</div>
+  return `<div class="eyebrow">roadmap · نقشهٔ راه</div><div class="h1">Road to C2</div><div class="fa" style="color:var(--dim);font-size:15px">از صفر تا سطح C2 (چارچوب اروپایی CEFR). هر سطح با واژگان، دستور، مکالمه و شنیداری کامل می‌شود.</div>
   <div class="road" style="margin-top:14px">${ROAD.map(r => {
     const s = levelStats(r.lv), done = s.pct >= .9;
     return `<div class="card lv-${r.lv} ${done ? 'done' : ''}"><div class="between"><div><span class="lvchip lv-${r.lv}" style="font-size:13px">${r.lv}</span> <b>${esc(r.t)}</b> <span class="fa" style="color:var(--dim)">· ${esc(r.fa)}</span></div>${done ? '<span class="done-mark">✓</span>' : ''}</div>
@@ -641,7 +641,7 @@ function vRoad() {
     <div class="eyebrow" style="margin-top:12px">you will be able to · خواهید توانست</div>${r.can.map(c => `<div class="rule"><div>✔︎ ${esc(c[0])}</div><div class="fa" style="color:var(--dim);font-size:14px">${esc(c[1])}</div></div>`).join('')}
     <div class="eyebrow" style="margin-top:10px">outside the app · بیرون از برنامه</div>${r.out.map(c => `<div class="rule"><div>• ${esc(c[0])}</div><div class="fa" style="color:var(--dim);font-size:14px">${esc(c[1])}</div></div>`).join('')}</div>`;
   }).join('')}</div>
-  <div class="card"><div class="h3">Honest note · یادداشت صادقانه</div><div class="sm" style="margin-top:4px">The app covers the vocabulary, grammar, listening and pronunciation core for each level. Real C1 also needs free conversation with people and corrected writing — plan those from B1 onwards.</div><div class="fa" style="margin-top:6px;font-size:14px;color:var(--dim)">این برنامه هستهٔ واژگان، دستور، شنیداری و تلفظ هر سطح را پوشش می‌دهد. برای C1 واقعی، مکالمهٔ آزاد با افراد و نوشتن با تصحیح هم لازم است؛ از سطح B1 آن‌ها را برنامه‌ریزی کنید.</div></div>`;
+  <div class="card"><div class="h3">Honest note · یادداشت صادقانه</div><div class="sm" style="margin-top:4px">The app covers the vocabulary, grammar, listening and pronunciation core for each level. Real C1–C2 also needs free conversation with people and corrected writing — plan those from B1 onwards.</div><div class="fa" style="margin-top:6px;font-size:14px;color:var(--dim)">این برنامه هستهٔ واژگان، دستور، شنیداری و تلفظ هر سطح را پوشش می‌دهد. برای C1 و C2 واقعی، مکالمهٔ آزاد با افراد و نوشتن با تصحیح هم لازم است؛ از سطح B1 آن‌ها را برنامه‌ریزی کنید.</div></div>`;
 }
 function vYou() {
   const vs = VOICES.slice().sort((a, b) => voiceScore(b, ST.accent, null) - voiceScore(a, ST.accent, null));
@@ -676,7 +676,7 @@ function ownerCard() {
 }
 function sendInvite(name) {
   const code = inviteCode(name), link = location.origin + location.pathname.replace(/[^/]*$/, '');
-  const text = `Hi ${name}! 👋\nYou're invited to our English app (A1 → C1), made for Persian speakers.\nسلام ${name}! به اپلیکیشن آموزش انگلیسی ما دعوت شده‌ای.\n\n1. Open this link in Safari / این لینک را در Safari باز کن:\n${link}\n2. Share → Add to Home Screen / Share ← Add to Home Screen\n3. Tap "I have an invitation code" and enter:\n   Name / نام: ${name}\n   Code / کد: ${code}\n\nGood luck! موفق باشی!`;
+  const text = `Hi ${name}! 👋\nYou're invited to our English app (A1 → C2), made for Persian speakers.\nسلام ${name}! به اپلیکیشن آموزش انگلیسی ما دعوت شده‌ای.\n\n1. Open this link in Safari / این لینک را در Safari باز کن:\n${link}\n2. Share → Add to Home Screen / Share ← Add to Home Screen\n3. Tap "I have an invitation code" and enter:\n   Name / نام: ${name}\n   Code / کد: ${code}\n\nGood luck! موفق باشی!`;
   if (navigator.share) navigator.share({ title: 'English app invitation', text }).catch(() => { });
   else { const a = el('a'); a.href = 'sms:?&body=' + encodeURIComponent(text); document.body.appendChild(a); a.click(); a.remove(); }
   try { navigator.clipboard && navigator.clipboard.writeText(text); } catch (e) { }
@@ -732,9 +732,9 @@ function boot() {
   welcomeUI(prim);
 }
 function setupUI() {
-  gate(`<div class="eyebrow">english · a1 → c1</div><div style="font-size:64px;margin:18px 0 4px">🇬🇧</div>
+  gate(`<div class="eyebrow">english · a1 → c2</div><div style="font-size:64px;margin:18px 0 4px">🇬🇧</div>
     <h1 class="h1" style="font-size:32px">Welcome!</h1><div class="fa" style="font-size:18px;text-align:left;direction:rtl">به اپلیکیشن آموزش انگلیسی خوش آمدید</div>
-    <p class="sm" style="margin:10px 0 26px">English for Persian speakers, from the very first word to C1.</p>
+    <p class="sm" style="margin:10px 0 26px">English for Persian speakers, from the very first word to C2.</p>
     <button class="btn" id="join">I have an invitation code · کد دعوت دارم</button>
     <button class="btn line" id="own" style="margin-top:12px">I'm the owner · مالک برنامه هستم</button>`);
   $('#own').onclick = ownerUI; $('#join').onclick = joinUI;
@@ -774,9 +774,9 @@ function joinUI() {
 }
 function welcomeUI(p) {
   const st = S.get('en.' + p.id + '.state', null), started = st && st.cards && Object.keys(st.cards).length;
-  gate(`<div class="eyebrow">english · a1 → c1</div><div style="text-align:center;margin:24px 0 6px"><span class="av" style="width:84px;height:84px;font-size:36px;border-radius:26px">${esc(p.name[0].toUpperCase())}</span></div>
+  gate(`<div class="eyebrow">english · a1 → c2</div><div style="text-align:center;margin:24px 0 6px"><span class="av" style="width:84px;height:84px;font-size:36px;border-radius:26px">${esc(p.name[0].toUpperCase())}</span></div>
     <h1 class="h1" style="text-align:center;font-size:30px">${started ? 'Welcome back' : 'Welcome'}, ${esc(p.name)}! 👋</h1>${p.owner ? '<div style="text-align:center"><span class="chip gold">OWNER</span></div>' : ''}
-    <p class="sm" style="text-align:center;margin:8px 0 26px">${started ? Object.keys(st.cards).length + ' words met so far' : 'Your road to C1 starts today · سفر شما تا C1 از امروز شروع می‌شود'}</p>
+    <p class="sm" style="text-align:center;margin:8px 0 26px">${started ? Object.keys(st.cards).length + ' words met so far' : 'Your road to C2 starts today · سفر شما تا C2 از امروز شروع می‌شود'}</p>
     <button class="btn" id="cont">${started ? 'Continue learning →' : 'Start learning →'}</button>
     ${PROFILES.length > 1 ? '<button class="btn line" id="nyou" style="margin-top:12px">Not you? Switch learner</button>' : ''}
     <button class="btn ghost" id="join2" style="margin-top:10px">I have an invitation code</button>`);
