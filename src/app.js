@@ -1,6 +1,6 @@
 'use strict';
 /* English for Persian speakers — A1 → C1. One-file web app (built by build.mjs). */
-const BUILD = '15 nov · b7';
+const BUILD = '15 nov · b8';
 const DAY = 864e5;
 
 /* ------------------------------ data ------------------------------ */
