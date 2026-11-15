@@ -6,7 +6,7 @@ home screen from Safari. Built on the model of the Dutch app (`abolfazlfarsad71/
 
 **Open:** https://abolfazlfarsad71.github.io/English-Language-App/
 
-## What is inside (build b11)
+## What is inside (build b12)
 - **Road to C2:** 292 topic units (A1 28 · A2 38 · B1 60 · B2 90 · C1 56 · C2 20), split into 8-word lessons; idiom units alternate with topic units.
 - **5,680 words and phrases** (about 920 idioms) with Farsi meaning, English synonyms, a practical example sentence + Farsi translation, and an
   emoji only where it shows exactly the word (others get a clean letter tile). New-word card floats in 3-D.
@@ -49,6 +49,8 @@ All texts, dialogues and exercises are original, written for this app. The refer
 copyrighted and are **not** copied into this public repository.
 
 ## Change log
+- **b12 (15 nov)** — line-by-line review of all 56 grammar lessons (rules, examples, tips, drills), 14 listening
+  stories, sounds section, road map and interface text; 7 corrections (ambiguous drills, two translations, a sound pair, a label).
 - **b11 (15 nov)** — new C2 level (20 units, 5 grammar lessons, 2 listening texts, road entry); 6 grammar gaps filled
   (subject/object questions, movement prepositions, zero conditional & time clauses, phrasal verbs, quantifiers,
   articles in depth); 86 more Essential Words words and 16 more Idioms in Use idioms; idiom units spread through B2–C1;
