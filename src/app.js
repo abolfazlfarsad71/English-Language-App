@@ -1,6 +1,6 @@
 'use strict';
 /* English for Persian speakers — A1 → C1. One-file web app (built by build.mjs). */
-const BUILD = '15 nov · b2';
+const BUILD = '15 nov · b3';
 const DAY = 864e5;
 
 /* ------------------------------ data ------------------------------ */
@@ -455,9 +455,9 @@ function finish() {
   const s = sess; markDay(s.n || 1); saveNow();
   const pct = s.n ? Math.round(100 * s.ok / s.n) : 100;
   $('#rbar').style.width = '100%';
-  $('#rbody').innerHTML = `<div style="text-align:center;margin-top:40px"><div style="font-size:72px">${pct >= 80 ? '🏆' : pct >= 50 ? '👏' : '💪'}</div>
+  $('#rbody').innerHTML = `<div style="text-align:center;margin-top:40px"><div class="trophy">${pct >= 80 ? '🏆' : pct >= 50 ? '🏅' : '💪'}</div>
     <div class="h1">${pct >= 80 ? 'Excellent!' : pct >= 50 ? 'Well done!' : 'Keep going!'}</div><div class="fa c" style="text-align:center;font-size:17px">${pct >= 80 ? 'عالی بود!' : pct >= 50 ? 'آفرین!' : 'ادامه بده!'}</div>
-    <div class="row" style="margin-top:22px"><div class="stat"><b>${s.ok}/${s.n}</b><span class="xs">correct</span></div><div class="stat"><b>🔥 ${streakNow()}</b><span class="xs">day streak</span></div><div class="stat"><b>${seenWords().length}</b><span class="xs">words met</span></div></div>
+    <div class="row" style="margin-top:22px"><div class="stat"><b>${s.ok}/${s.n}</b><span class="xs">correct</span></div><div class="stat gold"><b>🔥 ${streakNow()}</b><span class="xs">day streak</span></div><div class="stat"><b>${seenWords().length}</b><span class="xs">words met</span></div></div>
     <div class="card" style="text-align:left;margin-top:16px"><div class="eyebrow">next up</div><div class="sm" style="margin-top:4px;color:var(--tx)">${esc(nextHint())}</div></div>
     <button class="btn" id="fin" style="margin-top:16px">Done</button></div>`;
   $('#fin').onclick = () => endSession(false);
@@ -566,14 +566,14 @@ function render() {
 }
 function ring(p, label) {
   const r = 24, c = 2 * Math.PI * r;
-  return `<svg class="ring" viewBox="0 0 58 58"><circle cx="29" cy="29" r="${r}" fill="none" stroke="rgba(255,255,255,.09)" stroke-width="6"/><circle cx="29" cy="29" r="${r}" fill="none" stroke="url(#rg)" stroke-width="6" stroke-linecap="round" stroke-dasharray="${c * p} ${c}" transform="rotate(-90 29 29)"/><text x="29" y="33" text-anchor="middle" font-size="13" font-weight="800" fill="#EEF2FA">${label}</text></svg>`;
+  return `<svg class="ring" viewBox="0 0 58 58"><circle cx="29" cy="29" r="${r}" fill="none" stroke="rgba(255,255,255,.09)" stroke-width="6"/><circle cx="29" cy="29" r="${r}" fill="none" stroke="url(#rg)" stroke-width="6" stroke-linecap="round" stroke-dasharray="${c * p} ${c}" transform="rotate(-90 29 29)"/><text x="29" y="33" text-anchor="middle" font-size="13" font-weight="800" fill="#0F2A6B">${label}</text></svg>`;
 }
 function vToday() {
   const L = nextLesson(), due = dueList().length, cl = curLevel(), g = nextGrammar(), mc = missCount(), st = streakNow();
   const hr = new Date().getHours(), greet = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
   return `<div class="between"><div><div class="eyebrow">english · a1 → c1</div><div class="h1">${greet}, ${esc(ME.name)}!</div></div><div class="chip gold">🔥 ${st}</div></div>
   <button class="card tap glow" id="daily" style="margin-top:14px">
-    <div class="eyebrow" style="color:var(--gold)">today's lesson · درس امروز</div>
+    <div class="eyebrow">today's lesson · درس امروز</div>
     <div class="between" style="margin-top:6px"><div class="grow"><div class="h2">${L ? UMAP[L.u].i + ' ' + esc(lessonTitle(L)) : '🏁 Review & keep fluent'}</div>
     ${L ? `<div class="fa" style="text-align:left;font-size:14px;color:var(--dim)">${esc(UMAP[L.u].fa)}</div>` : ''}<div class="sm">${due} reviews · ${L ? L.words.filter(id => !ST.cards[id]).length + ' new words · ' : ''}grammar${g ? ': ' + esc(g.t) : ' review'}</div></div><span class="say big" style="pointer-events:none">▶</span></div>
   </button>
@@ -611,7 +611,7 @@ function vGrammar() {
   }
   const un = new Set(gramUnlocked().map(g => g.id));
   return `<div class="eyebrow">grammar · دستور زبان</div><div class="h1">Grammar</div><div class="sm">${GRAMMAR.length} lessons in CEFR order. A new one opens as you move along the road; you can read any lesson.</div>
-  ${LEVELS.map(lv => `<div class="sec"><span class="eyebrow">${lv}</span></div><div class="card" style="padding:4px 14px">` + GRAMMAR.filter(g => g.lv === lv).map(g => `<button class="list-item" data-gram="${g.id}" style="width:100%;text-align:left"><span class="lvchip lv-${g.lv}">${g.id.slice(1)}</span><div class="grow"><div style="font-weight:650">${esc(g.t)}</div><div class="fa" style="font-size:13px;color:var(--dim);text-align:left">${esc(g.fa)}</div></div><span>${gramLearned(g.id) ? '<span class="done-mark">✓</span>' : un.has(g.id) ? '🔓' : '🔒'}</span></button>`).join('') + '</div>').join('')}`;
+  ${LEVELS.map(lv => `<div class="sec"><span class="eyebrow">${lv}</span></div><div class="card" style="padding:4px 14px">` + GRAMMAR.filter(g => g.lv === lv).map(g => `<button class="list-item" data-gram="${g.id}" style="width:100%;text-align:left"><span class="lvchip lv-${g.lv}">${GRAMMAR.indexOf(g) + 1}</span><div class="grow"><div style="font-weight:650">${esc(g.t)}</div><div class="fa" style="font-size:13px;color:var(--dim);text-align:left">${esc(g.fa)}</div></div><span>${gramLearned(g.id) ? '<span class="done-mark">✓</span>' : un.has(g.id) ? '🔓' : '🔒'}</span></button>`).join('') + '</div>').join('')}`;
 }
 function vListen() {
   if (SUB && SUB.startsWith('u') && UMAP[SUB]) {
@@ -635,8 +635,8 @@ function vRoad() {
   return `<div class="eyebrow">roadmap · نقشهٔ راه</div><div class="h1">Road to C1</div><div class="fa" style="color:var(--dim);font-size:15px">از صفر تا سطح C1 (چارچوب اروپایی CEFR). هر سطح با واژگان، دستور، مکالمه و شنیداری کامل می‌شود.</div>
   <div class="road" style="margin-top:14px">${ROAD.map(r => {
     const s = levelStats(r.lv), done = s.pct >= .9;
-    return `<div class="card lv-${r.lv}"><div class="between"><div><span class="lvchip lv-${r.lv}" style="font-size:13px">${r.lv}</span> <b>${esc(r.t)}</b> <span class="fa" style="color:var(--dim)">· ${esc(r.fa)}</span></div>${done ? '<span class="done-mark">✓</span>' : ''}</div>
-    <div class="bar" style="margin-top:10px"><i style="width:${Math.round(100 * s.pct)}%"></i></div>
+    return `<div class="card lv-${r.lv} ${done ? 'done' : ''}"><div class="between"><div><span class="lvchip lv-${r.lv}" style="font-size:13px">${r.lv}</span> <b>${esc(r.t)}</b> <span class="fa" style="color:var(--dim)">· ${esc(r.fa)}</span></div>${done ? '<span class="done-mark">✓</span>' : ''}</div>
+    <div class="bar ${done ? 'gold' : ''}" style="margin-top:10px"><i style="width:${Math.round(100 * s.pct)}%"></i></div>
     <div class="xs" style="margin-top:6px">${s.sw}/${s.ws} words met · ${s.kg}/${s.gs} grammar · ${s.dl}/${s.us} dialogues · about ${r.hours} study hours</div>
     <div class="eyebrow" style="margin-top:12px">you will be able to · خواهید توانست</div>${r.can.map(c => `<div class="rule"><div>✔︎ ${esc(c[0])}</div><div class="fa" style="color:var(--dim);font-size:14px">${esc(c[1])}</div></div>`).join('')}
     <div class="eyebrow" style="margin-top:10px">outside the app · بیرون از برنامه</div>${r.out.map(c => `<div class="rule"><div>• ${esc(c[0])}</div><div class="fa" style="color:var(--dim);font-size:14px">${esc(c[1])}</div></div>`).join('')}</div>`;
