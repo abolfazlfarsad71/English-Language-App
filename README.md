@@ -6,13 +6,13 @@ home screen from Safari. Built on the model of the Dutch app (`abolfazlfarsad71/
 
 **Open:** https://abolfazlfarsad71.github.io/English-Language-App/
 
-## What is inside (build b12)
-- **Road to C2:** 292 topic units (A1 28 · A2 38 · B1 60 · B2 90 · C1 56 · C2 20), split into 8-word lessons; idiom units alternate with topic units.
+## What is inside (build b13)
+- **Road to C2:** 297 topic units (A1 28 · A2 40 · B1 63 · B2 90 · C1 56 · C2 20), split into 8-word lessons; idiom units alternate with topic units.
 - **5,680 words and phrases** (about 920 idioms) with Farsi meaning, English synonyms, a practical example sentence + Farsi translation, and an
   emoji only where it shows exactly the word (others get a clean letter tile). New-word card floats in 3-D.
-- **56 grammar lessons** in CEFR order, rules in English + Farsi, 6–7 examples, 8 drills, and a
+- **60 grammar lessons** in CEFR order, rules in English + Farsi, 6–7 examples, 8 drills, and a
   "tip for Persian speakers" on the typical mistake (articles, word order, he/she -s, mustn't vs don't have to…).
-- **292 daily-life dialogues** (4–8 lines, two speakers, Farsi under each line) with comprehension questions,
+- **297 daily-life dialogues** (4–8 lines, two speakers, Farsi under each line) with comprehension questions,
   **14 listening stories** A1→C2, and **Sounds for Persian speakers** (th, v/w, "eschool", ship/sheep, stress…).
 - **Daily lesson:** mistakes first → reviews (spaced repetition) → new words with checks → grammar every day →
   cloze practice → the unit dialogue heard blind when a unit is finished. Wrong answers come back 3 cards later and
@@ -49,6 +49,10 @@ All texts, dialogues and exercises are original, written for this app. The refer
 copyrighted and are **not** copied into this public repository.
 
 ## Change log
+- **b13 (15 nov)** — corrections from an independent hand-read of all 292 units, grammar and listening (each verified before
+  applying); own pass over all 3,849 synonym fields (only true synonyms kept); 60 basic words moved from B2/C1 into five new
+  A1–B1 units; 4 grammar lessons added (mine/yours, myself, question tags, so/neither do I); g47 moved to A2; listening
+  questions now have Farsi and a third question each; part-of-speech tags fixed on hyphenated compounds.
 - **b12 (15 nov)** — line-by-line review of all 56 grammar lessons (rules, examples, tips, drills), 14 listening
   stories, sounds section, road map and interface text; 7 corrections (ambiguous drills, two translations, a sound pair, a label).
 - **b11 (15 nov)** — new C2 level (20 units, 5 grammar lessons, 2 listening texts, road entry); 6 grammar gaps filled

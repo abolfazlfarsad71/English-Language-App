@@ -1,6 +1,6 @@
 'use strict';
 /* English for Persian speakers — A1 → C2. One-file web app (built by build.mjs). */
-const BUILD = '15 nov · b12';
+const BUILD = '15 nov · b13';
 const DAY = 864e5;
 
 /* ------------------------------ data ------------------------------ */
@@ -545,7 +545,7 @@ function passageCard(P) {
 function passageQ(P, k) {
   const q = P.q[k];
   return {
-    kind: 'pq', key: 'p:' + P.id + ':' + k, render(body, done) { body.innerHTML = `<div class="eyebrow">${esc(P.t)}</div><div class="card" style="margin-top:16px;font-size:18px;font-weight:700">${esc(q.q)}</div>`; mcq(body, q.o, q.o[0], done); },
+    kind: 'pq', key: 'p:' + P.id + ':' + k, render(body, done) { body.innerHTML = `<div class="eyebrow">${esc(P.t)}</div><div class="card" style="margin-top:16px"><div style="font-size:18px;font-weight:700">${esc(q.q)}</div><div class="fa" style="color:var(--dim);margin-top:4px">${esc(q.fa || '')}</div></div>`; mcq(body, q.o, q.o[0], done); },
     grade(ok) { const s = ST.lis[P.id] || (ST.lis[P.id] = { n: 0, ok: 0 }); s.n++; if (ok) s.ok++; if (!ok) missNote('p:' + P.id + ':' + k, false); save(); },
     feedback: () => esc(q.o[0]), remake: () => passageQ(P, k)
   };
