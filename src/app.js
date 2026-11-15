@@ -1,6 +1,6 @@
 'use strict';
 /* English for Persian speakers — A1 → C1. One-file web app (built by build.mjs). */
-const BUILD = '15 nov · b1';
+const BUILD = '15 nov · b2';
 const DAY = 864e5;
 
 /* ------------------------------ data ------------------------------ */
@@ -58,7 +58,14 @@ const ERRLOG = S.get('en.errlog', []);
 function logErr(m) { ERRLOG.push({ t: new Date().toISOString(), m: String(m).slice(0, 300), b: BUILD }); while (ERRLOG.length > 20) ERRLOG.shift(); S.set('en.errlog', ERRLOG); }
 window.addEventListener('error', e => logErr((e.message || 'error') + ' @' + (e.lineno || '')));
 window.addEventListener('unhandledrejection', e => logErr('promise: ' + (e.reason && e.reason.message || e.reason)));
+const PIC = {
+  solar: '<svg viewBox="0 0 64 64"><circle cx="50" cy="12" r="7" fill="#FFC24A"/><g stroke="#FFC24A" stroke-width="2" stroke-linecap="round"><path d="M50 1v3M61 12h-3M58 4l-2 2M42 4l2 2"/></g><path d="M8 26h40l8 22H4z" fill="#2B4C8C" stroke="#9DBBFF" stroke-width="1.5"/><path d="M18 26l-4 22M28 26v22M38 26l4 22M6 33h45M5 40h49" stroke="#9DBBFF" stroke-width="1.2"/><path d="M28 48v8M18 58h20" stroke="#97A7C7" stroke-width="3" stroke-linecap="round"/></svg>',
+  turbine: '<svg viewBox="0 0 64 64"><path d="M30 26h4l2 34h-8z" fill="#DCE6F7"/><circle cx="32" cy="24" r="3.5" fill="#fff"/><g fill="#EEF2FA"><path d="M32 24L29 3c3-1 5 0 5 2z"/><path d="M32 24l19 9c-1 3-3 4-5 3z"/><path d="M32 24L13 34c-1-3 0-5 2-5z"/></g><path d="M4 61h56" stroke="#34D399" stroke-width="3" stroke-linecap="round"/></svg>',
+  pylon: '<svg viewBox="0 0 64 64" fill="none" stroke="#DCE6F7" stroke-width="2" stroke-linejoin="round"><path d="M32 4L20 60M32 4l12 56M24 42h16M26 30h12M28 18h8M24 42l14 18M40 42L26 60M26 30l13 12M38 30L25 42"/><path d="M12 18h40M8 30h48" stroke-width="2.5"/><path d="M0 16c10 4 10 4 12 2M52 18c2 2 2 2 12-2M0 28c6 4 6 4 8 2M56 30c2 2 2 2 8-2" stroke="#FFC24A" stroke-width="1.5"/></svg>',
+  bess: '<svg viewBox="0 0 64 64"><rect x="6" y="18" width="52" height="34" rx="3" fill="#DCE6F7"/><rect x="6" y="18" width="52" height="7" fill="#97A7C7"/><g fill="#5B8DEF"><rect x="11" y="29" width="9" height="18" rx="1"/><rect x="23" y="29" width="9" height="18" rx="1"/><rect x="35" y="29" width="9" height="18" rx="1"/></g><path d="M52 30l-4 8h4l-3 8 7-10h-4l3-6z" fill="#FFC24A"/><path d="M4 56h56" stroke="#34D399" stroke-width="3" stroke-linecap="round"/><path d="M18 18V11h28v7" stroke="#97A7C7" stroke-width="2" fill="none"/></svg>'
+};
 function pic(w, big) {
+  if (w.e && w.e[0] === '@' && PIC[w.e.slice(1)]) return big ? `<div class="stage"><div class="pic3d"><span class="svgpic">${PIC[w.e.slice(1)]}</span></div></div>` : `<span class="mini"><span class="svgpic sm">${PIC[w.e.slice(1)]}</span></span>`;
   if (w.e) return big ? `<div class="stage"><div class="pic3d"><span>${w.e}</span></div></div>` : `<span class="mini">${w.e}</span>`;
   const L = esc(w.w.replace(/^(to |a |the )/, '')[0].toUpperCase());
   return big ? `<div class="stage"><div class="pic3d tile"><span>${L}</span></div></div>` : `<span class="mini tile">${L}</span>`;
@@ -98,7 +105,8 @@ function say(text, opt) {
   if (!('speechSynthesis' in window)) { if (!opt.quiet) toast('This phone has no speech voice'); if (opt.end) opt.end(); return; }
   audioSession();
   try {
-    if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
+    const busy = speechSynthesis.speaking || speechSynthesis.pending;
+    if (busy) speechSynthesis.cancel();
     const go = (useNamed) => {
       const u = new SpeechSynthesisUtterance(text);
       const v = useNamed ? bestVoice(opt.male) : null;
@@ -116,7 +124,7 @@ function say(text, opt) {
       speechSynthesis.speak(u);
       if (useNamed && !opt._retry) setTimeout(() => { if (!started && !speechSynthesis.speaking && !opt._retry) { opt._retry = true; try { speechSynthesis.cancel(); } catch (x) { } go(false); } }, 1800);
     };
-    go(true);
+    if (busy) setTimeout(() => go(true), 90); else go(true);
   } catch (e) { logErr('say ' + e.message); if (opt.end) opt.end(); }
 }
 function stopSpeech() { try { speechSynthesis.cancel(); } catch (e) { } }
@@ -156,12 +164,12 @@ function nextLesson() { return LESSONS.find(L => !lessonDone(L)) || null; }
 const lessonsDone = () => LESSONS.filter(lessonDone).length;
 function lessonIdx(L) { return LESSONS.indexOf(L); }
 function lessonTitle(L) { const u = UMAP[L.u]; return u.t + ' · part ' + (L.k + 1); }
-// mistakes come back in later sessions until answered right in two later sessions
+// mistakes come back in later sessions until answered right in a later session
 let SESSION_ID = 0;
 function missNote(key, ok) {
   const m = ST.miss[key];
   if (!ok) { ST.miss[key] = { n: 0, s: SESSION_ID, t: Date.now() }; return; }
-  if (m && m.s !== SESSION_ID) { m.n++; m.s = SESSION_ID; if (m.n >= 2) delete ST.miss[key]; }
+  if (m && m.s !== SESSION_ID) { m.n++; m.s = SESSION_ID; if (m.n >= 1) delete ST.miss[key]; }
 }
 const missCount = () => Object.keys(ST.miss).length;
 // grammar: rule k opens after lesson round(k * ratio); spread over the road in level order
@@ -200,10 +208,25 @@ function streakNow() { const d = today(); const y = new Date(Date.now() - DAY); 
 
 /* ------------------------------ exercises ------------------------------ */
 // each exercise: {kind, key, render(body, done)} where done(ok) grades. Built fresh by make() so a retry is reshuffled.
+// nouns that have no plural, so they are never offered as "…s" in fill-the-gap
+const UNCOUNT = new Set('water tea coffee milk rice bread chicken weather rain snow wind music luggage cash money heating pollution inflation unemployment consumption progress feedback waste equality crime experience assistance leverage information advice news homework furniture time free time income debt budget rent fee salary exercise medicine fever space gym painting film emissions climate change fossil fuel equality'.split(' ').filter(Boolean));
+// verbs with irregular past or doubled consonant are never auto-inflected as distractors
+const IRREG = new Set('hurt leave lend send spend swim withdraw buy pay read meet understand speak wear get take make find give put run come set go feel keep bring think cost fall draw beat hold bear hang begin stop transfer cancel win lose sit forget drive ride write eat drink sleep sell tell say know see do have be cut shut let quit split'.split(' '));
+['child','tooth','person','man','woman','foot','left','right','shoes','trousers','parents','news','wife','emissions','terms','sofa'].forEach(x => UNCOUNT.add(x));
+const faParts = s => s.replace(/\(.*?\)/g, '').split(/[،؛,/]/).map(x => x.trim()).filter(Boolean);
+const enKey = s => s.toLowerCase().replace(/\(.*?\)/g, '').trim();
+function clash(w, x) {
+  if (enKey(x.w) === enKey(w.w)) return true;
+  const a = faParts(w.fa), b = faParts(x.fa);
+  if (a.some(p => b.includes(p))) return true;
+  const ws = w.syn.map(enKey), xs = x.syn.map(enKey);
+  if (ws.includes(enKey(x.w)) || xs.includes(enKey(w.w)) || ws.some(p => xs.includes(p))) return true;
+  return false;
+}
 function distractWords(w, n, field) {
-  const same = WORDS.filter(x => x.id !== w.id && x.pos === w.pos && x[field] !== w[field]);
+  const same = WORDS.filter(x => x.id !== w.id && x.pos === w.pos && x[field] !== w[field] && !clash(w, x));
   const near = same.filter(x => x.u === w.u || x.lv === w.lv);
-  const pool = near.length >= n ? near : same.length >= n ? same : WORDS.filter(x => x.id !== w.id);
+  const pool = near.length >= n ? near : same.length >= n ? same : WORDS.filter(x => x.id !== w.id && !clash(w, x));
   const out = [], seen = new Set([w[field]]);
   for (const x of shuffle(pool)) { if (!seen.has(x[field])) { seen.add(x[field]); out.push(x); } if (out.length >= n) break; }
   return out;
@@ -243,7 +266,7 @@ function wordEx(w, kind) {
   const key = 'w:' + w.id;
   const R = {
     en2fa(body, done) {
-      body.innerHTML = `<div class="eyebrow c" style="text-align:center">what does it mean?</div>${pic(w, false).replace('mini', 'mini" style="display:flex;margin:14px auto 0')}<div class="prompt"><div class="w">${esc(w.w)}</div>${sayBtn(w.w)}</div>`;
+      body.innerHTML = `<div class="eyebrow c" style="text-align:center">what does it mean?</div><div style="display:flex;justify-content:center;margin-top:14px">${pic(w, false)}</div><div class="prompt"><div class="w">${esc(w.w)}</div>${sayBtn(w.w)}</div>`;
       say(w.w, { quiet: true });
       mcq(body, [w.fa, ...distractWords(w, 3, 'fa').map(x => x.fa)], w.fa, done, 'fa');
     },
@@ -260,11 +283,16 @@ function wordEx(w, kind) {
       const b = blankIn(w.ex, w.w);
       if (!b) return R.fa2en(body, done);
       body.innerHTML = `<div class="eyebrow" style="text-align:center">complete the sentence</div><div class="card" style="margin-top:16px;font-size:19px;font-weight:600;text-align:center">${b.text}</div><div class="fa c" style="font-size:15px;color:var(--dim);text-align:center">${esc(w.exfa)}</div>`;
-      const ds = distractWords(w, 3, 'w').map(x => x.w);
+      const suf = (b.form.toLowerCase().match(/(ing|ed|es|s|d)$/) || [''])[0];
+      const base = enKey(w.w), extra = suf && b.form.toLowerCase() !== base ? b.form.toLowerCase().slice(base.replace(/e$/, '').length) : '';
+      const inflect = x => { const t = enKey(x); if (!extra || /\s/.test(t)) return t; if (extra === 'ing') return t.replace(/e$/, '') + 'ing'; if (/^(ed|d)$/.test(extra)) return t.endsWith('e') ? t + 'd' : t + 'ed'; if (/^(es|s)$/.test(extra)) return /[^aeiou]y$/.test(t) ? t.slice(0, -1) + 'ies' : /(s|sh|ch|x)$/.test(t) ? t + 'es' : t + 's'; return t; };
+      const cap = s2 => /^[A-Z]/.test(b.form) ? s2[0].toUpperCase() + s2.slice(1) : s2;
+      const ds = [...new Set(distractWords(w, 5, 'w').filter(x => /\s/.test(enKey(x.w)) === /\s/.test(base) && !(extra && x.pos === 'n' && UNCOUNT.has(enKey(x.w))) && !(extra && x.pos === 'v' && IRREG.has(enKey(x.w)))).map(x => cap(inflect(x.w))))].filter(x => x.toLowerCase() !== b.form.toLowerCase()).slice(0, 3);
+      if (ds.length < 3) return R.fa2en(body, done);
       mcq(body, [b.form, ...ds], b.form, (ok, cor) => { say(w.ex, { quiet: true }); done(ok, cor); });
     },
     type(body, done) {
-      body.innerHTML = `<div class="eyebrow" style="text-align:center">type it in English</div><div class="prompt"><div class="fa">${esc(w.fa)}</div><div class="xs" style="margin-top:6px">${esc(w.w[0])}${'·'.repeat(Math.max(0, w.w.length - 1))}</div></div>
+      body.innerHTML = `<div class="eyebrow" style="text-align:center">type it in English</div><div class="prompt"><div class="fa">${esc(w.fa)}</div><div class="xs" style="margin-top:6px">${esc(enKey(w.w)[0])}${'·'.repeat(Math.max(0, enKey(w.w).length - 1))}</div></div>
         <input class="typebox" id="tb" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="type here"><button class="btn" id="tbgo" style="margin-top:12px">Check</button>`;
       const inp = body.querySelector('#tb'); setTimeout(() => inp.focus(), 50);
       const norm = s => s.toLowerCase().replace(/[’']/g, "'").replace(/\(.*?\)/g, '').replace(/[^a-z' -]/g, '').replace(/\s+/g, ' ').trim();
@@ -332,7 +360,7 @@ function grammarDrill(g, k) {
     kind: 'gdrill', key: 'g:' + g.id + ':' + k, render(body, done) {
       const q = esc(d[0]).replace('___', '<span class="gap">_____</span>');
       body.innerHTML = `<div class="between"><span class="eyebrow">grammar · ${esc(g.t)}</span>${lvChip(g.lv)}</div><div class="card" style="margin-top:16px;font-size:19px;font-weight:600;text-align:center">${q}</div>`;
-      mcq(body, d.slice(1), d[1], (ok, cor) => { if (d[0].includes('___')) say(d[0].replace('___', cor), { quiet: true }); else say(cor, { quiet: true }); done(ok, cor); });
+      mcq(body, d.slice(1), d[1], (ok, cor) => { if (d[0].includes('___')) say(d[0].replace('___', cor === '—' ? '' : cor).replace(/s+/g, ' '), { quiet: true }); else say(cor, { quiet: true }); done(ok, cor); });
     },
     grade(ok) { const s = ST.gram[g.id] || (ST.gram[g.id] = { n: 0, ok: 0 }); s.n++; if (ok) s.ok++; if (!ok) missNote('g:' + g.id + ':' + k, false); save(); },
     feedback: () => esc(d[0].includes('___') ? d[0].replace('___', d[1]) : d[1]), remake: () => grammarDrill(g, k)
@@ -464,22 +492,20 @@ function missItems(limit) {
 function buildDaily() {
   const items = [], usedW = new Set();
   // 1. warm-up: mistakes from earlier sessions
-  missItems(5).forEach(x => { items.push(x); if (x.w) usedW.add(x.w.id); });
+  missItems(8).forEach(x => { items.push(x); if (x.w) usedW.add(x.w.id); });
   // 2. due reviews
-  const due = dueList().filter(w => !usedW.has(w.id)).slice(0, 14);
+  const due = dueList().filter(w => !usedW.has(w.id)).slice(0, 12);
   due.slice(0, 6).forEach(w => { items.push(wordEx(w)); usedW.add(w.id); });
   // 3. new words of the next lesson: intro card, then a check after every two
   const L = nextLesson(); const fresh = L ? L.words.filter(id => !ST.cards[id]).slice(0, ST.perDay || 8).map(id => WMAP[id]) : [];
   const half = Math.ceil(fresh.length / 2);
-  const intro = (ws, off) => ws.forEach((w, i) => { items.push(introCard(w, L, off + i, fresh.length)); if (i % 2 === 1) { items.push(wordEx(ws[i - 1], 'en2fa')); items.push(wordEx(w, 'listen')); } });
+  const intro = (ws, off) => { ws.forEach((w, i) => { items.push(introCard(w, L, off + i, fresh.length)); if (i % 2 === 1) { items.push(wordEx(ws[i - 1], 'en2fa')); items.push(wordEx(w, 'listen')); } }); if (ws.length % 2) items.push(wordEx(ws[ws.length - 1], 'en2fa')); };
   intro(fresh.slice(0, half), 0);
-  if (fresh.length % 2 && half) items.push(wordEx(fresh[half - 1], 'en2fa'));
   // 4. grammar every day: the next rule on the path, or a review of the oldest learned rule
   const g = nextGrammar();
   if (g) { const seen = ST.gram[g.id] && ST.gram[g.id].t; items.push(grammarTeach(g, false)); pick([...g.d.keys()], 4).forEach(k => items.push(grammarDrill(g, k))); }
   else { const rv = gramReviewPool()[0]; if (rv) { items.push(grammarTeach(rv, true)); pick([...rv.d.keys()], 3).forEach(k => items.push(grammarDrill(rv, k))); } }
   intro(fresh.slice(half), half);
-  if ((fresh.length - half) % 2) items.push(wordEx(fresh[fresh.length - 1], 'fa2en'));
   // 5. remaining reviews, mixed with production practice of today's words
   due.slice(6).forEach(w => items.push(wordEx(w)));
   fresh.forEach(w => { if (blankIn(w.ex, w.w)) items.push(wordEx(w, 'cloze')); });
@@ -551,7 +577,7 @@ function vToday() {
     <div class="between" style="margin-top:6px"><div class="grow"><div class="h2">${L ? UMAP[L.u].i + ' ' + esc(lessonTitle(L)) : '🏁 Review & keep fluent'}</div>
     ${L ? `<div class="fa" style="text-align:left;font-size:14px;color:var(--dim)">${esc(UMAP[L.u].fa)}</div>` : ''}<div class="sm">${due} reviews · ${L ? L.words.filter(id => !ST.cards[id]).length + ' new words · ' : ''}grammar${g ? ': ' + esc(g.t) : ' review'}</div></div><span class="say big" style="pointer-events:none">▶</span></div>
   </button>
-  ${mc ? `<button class="card tap" id="miss"><div class="between"><div><div class="eyebrow" style="color:var(--coral)">your mistakes · اشتباهات</div><div class="h3" style="margin-top:4px">${mc} question${mc > 1 ? 's' : ''} to master</div><div class="xs">They also open your next daily lessons until you get them right twice.</div></div><span style="font-size:28px">🎯</span></div></button>` : ''}
+  ${mc ? `<button class="card tap" id="miss"><div class="between"><div><div class="eyebrow" style="color:var(--coral)">your mistakes · اشتباهات</div><div class="h3" style="margin-top:4px">${mc} question${mc > 1 ? 's' : ''} to master</div><div class="xs">They also open your next daily lessons until you get them right again.</div></div><span style="font-size:28px">🎯</span></div></button>` : ''}
   <div class="card"><div class="row">${ring(cl.pct, cl.lv)}<div class="grow"><div class="eyebrow">your level</div><div class="h3">${Math.round(cl.pct * 100)}% through ${cl.lv}</div><div class="bar" style="margin-top:8px"><i style="width:${Math.round(100 * lessonsDone() / LESSONS.length)}%"></i></div><div class="xs" style="margin-top:4px">Lesson ${Math.min(LESSONS.length, lessonsDone() + 1)} of ${LESSONS.length} on the road to C1</div></div></div></div>
   <div class="row"><button class="card tap grow" id="qr" style="margin:0"><div style="font-size:24px">⚡</div><div class="h3">Quick review</div><div class="xs">${seenWords().length} words met</div></button>
   <button class="card tap grow" id="gl" style="margin:0"><div style="font-size:24px">🎧</div><div class="h3">Listening</div><div class="xs">${UNITS.filter(u => ST.dlg[u.id]).length} dialogues done</div></button></div>

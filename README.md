@@ -6,7 +6,7 @@ home screen from Safari. Built on the model of the Dutch app (`abolfazlfarsad71/
 
 **Open:** https://abolfazlfarsad71.github.io/English-Language-App/
 
-## What is inside (build b1)
+## What is inside (build b2)
 - **Road to C1:** 30 topic units (A1 8 · A2 7 · B1 6 · B2 5 · C1 4), each split into 2 lessons → 60 lessons.
 - **480 words** with Farsi meaning, English synonyms, a practical example sentence + Farsi translation, and an
   emoji only where it shows exactly the word (others get a clean letter tile). New-word card floats in 3-D.
@@ -47,3 +47,13 @@ Never renumber word ids (`u03-5`) or unit/grammar ids: they are keys in saved pr
 All texts, dialogues and exercises are original, written for this app. The reference books in the owner's folder
 (Vocabulary in Use, Idioms in Use, 4000 Essential Words…) guided the topic and level choice; their text and audio are
 copyrighted and are **not** copied into this public repository.
+
+## Change log
+- **b2 (15 nov)** — full review: ~25 Farsi translations and 5 dialogue lines corrected; duplicate words removed
+  (bill, account, deadline, budget, bottom line); 13 emojis removed or replaced where they did not show the exact word
+  (including literal pictures on idioms); 4 drawn pictures (solar panel, wind turbine, pylon, battery storage).
+  Exercises: wrong options can no longer be another correct answer (same Farsi meaning or synonym); fill-the-gap options
+  take the same ending as the answer (works / lives / living) without broken forms; every new word is checked;
+  speech no longer starts in the same instant as it is cancelled (iOS); mistakes clear after one right answer in a
+  later session.
+- **b1 (15 nov)** — first version.
