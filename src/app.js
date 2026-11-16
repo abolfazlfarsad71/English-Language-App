@@ -1,6 +1,6 @@
 'use strict';
 /* English for Persian speakers — A1 → C2. One-file web app (built by build.mjs). */
-const BUILD = '16 nov · b14';
+const BUILD = '17 nov · b15';
 const DAY = 864e5;
 
 /* ------------------------------ data ------------------------------ */
@@ -30,7 +30,7 @@ const PKEY = 'en.profiles';
 let PROFILES = S.get(PKEY, []);
 let ME = null, ST = null;
 function FRESH() {
-  return { v: 1, cards: {}, gram: {}, dlg: {}, lis: {}, miss: {}, days: {}, streak: { last: '', n: 0, best: 0 }, xp: 0, perDay: 30, voice: 'f1', rate: 1, showFa: true, created: Date.now() };
+  return { v: 1, cards: {}, gram: {}, dlg: {}, lis: {}, miss: {}, days: {}, streak: { last: '', n: 0, best: 0 }, xp: 0, perDay: 30, voice: 'f1', vf: 'f1', vm: 'm1', wv: 'mix', rnd: true, pace: 0, rate: 1, showFa: true, created: Date.now() };
 }
 function loadState(id) {
   const st = S.get('en.' + id + '.state', null);
@@ -81,7 +81,9 @@ const lab = (en, fa, style) => `<div class="eyebrow"${style ? ` style="${style}"
 // iOS 27 Safari no longer starts web speech reliably, so the recordings are the main source and the phone
 // voice is only a fallback. Each clip is fetched as its own small byte range of a CBR MP3 bundle and played
 // as a blob on one <audio> element that a silent clip unlocks on the first tap (same method as the Dutch app).
-const VOICE_LIST = [['f1', 'Emma', 'f'], ['f2', 'Amy', 'f'], ['f3', 'Hannah', 'f'], ['m1', 'Ryan', 'm'], ['m2', 'Joe', 'm'], ['m3', 'Henry', 'm']];
+// 12 voices, ordered from low to high pitch (median pitch measured on a test sentence)
+const VOICE_LIST = [['f2', 'Olivia', 'f', 'lower voice'], ['f1', 'Emma', 'f', 'medium'], ['f3', 'Hannah', 'f', 'medium-high'], ['f4', 'Grace', 'f', 'higher'], ['f5', 'Lily', 'f', 'high'], ['f6', 'Sophie', 'f', 'highest'],
+  ['m4', 'James', 'm', 'deepest'], ['m2', 'Joe', 'm', 'deep'], ['m5', 'Mike', 'm', 'low'], ['m6', 'David', 'm', 'medium'], ['m3', 'Henry', 'm', 'higher'], ['m1', 'Ryan', 'm', 'highest']];
 const AUDIO_BASE = 'audio/';
 const anorm = t => String(t).trim().replace(/\s+/g, ' ').toLowerCase();
 let AKEYS = null, AKEY_STATE = '', KEYS_P = null, AUDIO_ERR = '', AUDIO_LAST = '';
@@ -104,10 +106,17 @@ function loadVoice(v) {
   o.p.catch(() => { });
   return o.p;
 }
-const mainVoice = () => (ST && VOICE_LIST.some(x => x[0] === ST.voice)) ? ST.voice : 'f1';
+const isVoice = (v, g) => VOICE_LIST.some(x => x[0] === v && (!g || x[2] === g));
+const womanVoice = () => ST && isVoice(ST.vf, 'f') ? ST.vf : 'f1';
+const manVoice = () => ST && isVoice(ST.vm, 'm') ? ST.vm : 'm1';
+// words and sentences: the default woman, the default man, or both taking turns at random
+let MIXV = null;   // in 'both' mode one of the two default voices is picked per card, so prefetch and playback agree
+const pickMix = () => { MIXV = Math.random() < .5 ? womanVoice() : manVoice(); };
+const mainVoice = () => { const w = ST && ST.wv; return w === 'm' ? manVoice() : w === 'f' ? womanVoice() : (MIXV && isVoice(MIXV) && (MIXV === womanVoice() || MIXV === manVoice()) ? MIXV : womanVoice()); };
+const randVoice = g => { const l = VOICE_LIST.filter(x => !g || x[2] === g); return l[Math.floor(Math.random() * l.length)][0]; };
 const voiceName = v => (VOICE_LIST.find(x => x[0] === v) || VOICE_LIST[0])[1];
 function genderVoice(male, not) {   // the learner's own voice when it has the right gender, else the first other voice of that gender
-  const g = male ? 'm' : 'f', m = mainVoice();
+  const g = male ? 'm' : 'f', m = male ? manVoice() : womanVoice();
   const list = VOICE_LIST.filter(x => x[2] === g).map(x => x[0]);
   const order = m[0] === g ? [m, ...list.filter(x => x !== m)] : list;
   return order.find(x => x !== not) || order[0];
@@ -258,12 +267,13 @@ const dueList = (at) => WORDS.filter(w => { const c = ST.cards[w.id]; return c &
 function lessonDone(L) { return L.words.every(id => ST.cards[id]); }
 function nextLesson() { return LESSONS.find(L => !lessonDone(L)) || null; }
 const lessonsDone = () => LESSONS.filter(lessonDone).length;
-const SESSION_NEW = 10;                                    // new words per session; the day's target is reached over a few sessions
-const paceFor = lv => LEVELS.indexOf(lv) <= 2 ? 30 : 20;   // A1, A2, B1: 30 a day · B2, C1, C2: 20 a day
-function dayTarget() { const L = nextLesson(); return L ? paceFor(L.lv) : 0; }
+const paceFor = lv => LEVELS.indexOf(lv) <= 2 ? 30 : 20;   // recommended: A1, A2, B1: 30 a day · B2, C1, C2: 20 a day
+const myPace = () => ST && ST.pace >= 10 && ST.pace <= 100 ? ST.pace : 0;   // the learner's own choice, 10–100 (0 = recommended)
+function dayTarget() { const L = nextLesson(); return L ? (myPace() || paceFor(L.lv)) : 0; }
+function sessionNew() { return Math.max(10, Math.min(20, Math.round(dayTarget() / 3))); }   // new words per session; the day's target is reached over a few sessions
 function newToday() { const t0 = new Date(Date.now()); t0.setHours(0, 0, 0, 0); let n = 0; for (const k in ST.cards) if ((ST.cards[k].t || 0) >= +t0) n++; return n; }
 function freshWords(n) { const out = []; if (n <= 0) return out; for (const L of LESSONS) for (const id of L.words) if (!ST.cards[id]) { out.push(WMAP[id]); if (out.length >= n) return out; } return out; }
-function daysLeft() { let a = 0, b = 0; for (const w of WORDS) if (!ST.cards[w.id]) { if (LEVELS.indexOf(w.lv) <= 2) a++; else b++; } return Math.ceil(a / 30 + b / 20); }
+function daysLeft() { let a = 0, b = 0; for (const w of WORDS) if (!ST.cards[w.id]) { if (LEVELS.indexOf(w.lv) <= 2) a++; else b++; } const p = myPace(); return p ? Math.ceil((a + b) / p) : Math.ceil(a / 30 + b / 20); }
 const fmt = n => n.toLocaleString('en-US');
 function lessonIdx(L) { return LESSONS.indexOf(L); }
 function lessonTitle(L) { const u = UMAP[L.u]; return u.t + ' · part ' + (L.k + 1); }
@@ -488,12 +498,14 @@ function dialogueCard(u, blind) {
     }
   };
 }
-function dlgVoices(u) {   // a man's or woman's voice per speaker; role names (Seller, Doctor…) take the opposite of the other speaker
+function dlgVoices(u, fresh) {   // a man's or woman's voice per speaker; role names (Seller, Doctor…) take the opposite of the other speaker
   const sp = u.d.sp, g = sp.map(n => isMaleName(n) ? 'm' : isFemaleName(n) ? 'f' : '');
   sp.forEach((_, i) => { if (!g[i]) { const o = g.find((x, j) => j !== i && x); g[i] = o ? (o === 'm' ? 'f' : 'm') : (i % 2 ? 'm' : 'f'); } });
+  if (ST && ST.rnd) { if (!fresh && DLG_VC[u.id]) return DLG_VC[u.id]; const out = []; g.forEach((x, i) => { const l = VOICE_LIST.filter(v => v[2] === x && !out.includes(v[0])); out[i] = l[Math.floor(Math.random() * l.length)][0]; }); out.forEach(v => loadVoice(v)); return (DLG_VC[u.id] = out); }
   const out = []; g.forEach((x, i) => { out[i] = genderVoice(x === 'm', out.find(v => v && v[0] === x)); }); return out;
 }
-function dlgLines(u) { const d = u.d, vs = dlgVoices(u); return d.l.map((l, i) => `<div class="dl ${l[0] ? 'r' : ''}"><div class="bub" data-li="${i}" data-v="${vs[l[0]]}" data-say="${esc(l[1])}"><div class="spk">${esc(d.sp[l[0]])}</div><div>${esc(l[1])}</div><div class="fa">${esc(l[2])}</div></div></div>`).join(''); }
+const DLG_VC = {};
+function dlgLines(u) { const d = u.d, vs = dlgVoices(u, true); return d.l.map((l, i) => `<div class="dl ${l[0] ? 'r' : ''}"><div class="bub" data-li="${i}" data-v="${vs[l[0]]}" data-say="${esc(l[1])}"><div class="spk">${esc(d.sp[l[0]])}</div><div>${esc(l[1])}</div><div class="fa">${esc(l[2])}</div></div></div>`).join(''); }
 function isMaleName(n) { return /^(reza|sam|tom|omid|hamed|babak|kian|ali|ben|mark|jack|farhad|kaveh|mehdi|sina|paul|kamran|pouya|nima|arman|shahin|dariush|dr karimi|manager|doctor|clerk|waiter|landlord|officer|host|arash|hamid|behnam|kourosh|pedram|mike|liam|dan|saeed|navid|lucas|amir|rob|majid|dad|mehran|hassan|farid|oliver|kamyar|payam|ramin|jake|kasra|daniel|siamak|leo|yousef|saman|shahab|boy|ehsan|grandfather|behrouz|father|son|peter|husband|max|brother|fisherman|craftsman)$/i.test(n.trim()); }
 function isFemaleName(n) { return /^(emma|maryam|nora|leila|mina|lily|ladan|zoe|ella|kate|grace|fariba|anna|golnar|shiva|lucy|mum|tara|nasrin|jane|elham|soraya|woman|sophie|neda|parisa|nazanin|sahar|shirin|emily|roya|yasmin|mahsa|arezoo|rose|mia|sara|ava|clara|parvaneh|shaghayegh|hannah|chloe|golnaz|hoda|lena|taraneh|samira|fatemeh|grandmother|laleh|nadia|mother|sima|wife|grandma|helen|laura|jess|bita|leyla|lisa|nina|olivia|daughter|sister|girl)$/i.test(n.trim()); }
 let DLG_RUN = 0;
@@ -540,6 +552,7 @@ function step() {
   body.innerHTML = ''; body.dataset.done = ''; body.scrollTop = 0;
   $('#rbar').style.width = (100 * sess.i / sess.items.length) + '%';
   $('#rcount').textContent = (sess.i + 1) + '/' + sess.items.length;
+  pickMix();
   try { it.render(body, (ok, cor) => answered(it, ok, cor)); prefetchIn(body); }
   catch (e) { logErr('render ' + it.key + ' ' + e.message); sess.i++; step(); }
 }
@@ -605,7 +618,7 @@ function buildDaily() {
   const due = dueList().filter(w => !usedW.has(w.id)).slice(0, 12);
   due.slice(0, 6).forEach(w => { items.push(wordEx(w)); usedW.add(w.id); });
   // 3. new words in road order (across lessons): intro card, then a check after every two
-  const L = nextLesson(), fresh = freshWords(Math.min(SESSION_NEW, Math.max(0, dayTarget() - newToday())));
+  const L = nextLesson(), fresh = freshWords(Math.min(sessionNew(), Math.max(0, dayTarget() - newToday())));
   fresh.forEach(w => { prefetch(w.w); prefetch(w.ex); });
   const half = Math.ceil(fresh.length / 2);
   const intro = (ws, off) => { ws.forEach((w, i) => { items.push(introCard(w, L, off + i, fresh.length)); if (i % 2 === 1) { items.push(wordEx(ws[i - 1], 'en2fa')); items.push(wordEx(w, 'listen')); } }); if (ws.length % 2) items.push(wordEx(ws[ws.length - 1], 'en2fa')); };
@@ -645,7 +658,7 @@ function passageCard(P) {
       <div id="ptext" class="card hide">${P.s.map((x, i) => `<div class="rule" data-pi="${i}" data-say="${esc(x[0])}"><div style="font-weight:600">${esc(x[0])}</div><div class="fa" style="color:var(--dim);font-size:14px;margin-top:3px">${esc(x[1])}</div></div>`).join('')}</div>
       <button class="btn line sm" id="pshow" style="margin-top:8px">Show the text</button>
       <button class="btn" id="pnext" style="margin-top:12px">Answer the questions →</button>`;
-      const play = () => { const run = ++DLG_RUN; let i = 0; const nx = () => { if (run !== DLG_RUN || i >= P.s.length) return; say(P.s[i][0], { quiet: true, end: () => { if (run === DLG_RUN) { i++; setTimeout(nx, 300); } } }); }; nx(); };
+      const play = () => { const run = ++DLG_RUN, pv = ST.rnd ? randVoice() : mainVoice(); loadVoice(pv); let i = 0; const nx = () => { if (run !== DLG_RUN || i >= P.s.length) return; say(P.s[i][0], { quiet: true, v: pv, end: () => { if (run === DLG_RUN) { i++; setTimeout(nx, 300); } } }); }; nx(); };
       body.querySelector('#pplay').onclick = play;
       body.querySelector('#pshow').onclick = () => body.querySelector('#ptext').classList.toggle('hide');
       body.querySelector('#pnext').onclick = () => { stopSpeech(); DLG_RUN++; done(true); };
@@ -663,16 +676,16 @@ function passageQ(P, k) {
 }
 
 /* ------------------------------ screens ------------------------------ */
-let TAB = 'road', SUB = null, ROAD_OPEN = null;
+let TAB = 'road', SUB = null;
 const TABS = [['road', '🗺️', 'Road'], ['today', '🏠', 'Today'], ['words', '📚', 'Words'], ['grammar', '🧠', 'Grammar'], ['listen', '🎧', 'Listen'], ['you', '👤', 'You']];
 function render() {
   if (!ME) return;
-  const a = $('#app');
+  const a = $('#app'); pickMix();
   let h = '';
   try { h = ({ today: vToday, words: vWords, grammar: vGrammar, listen: vListen, road: vRoad, you: vYou })[TAB](); }
   catch (e) { logErr('view ' + TAB + ' ' + e.message); h = `<div class="card">Something went wrong. ${esc(e.message)}</div>`; }
   a.innerHTML = h + `<nav id="tabs">${TABS.map(t => `<button data-tab="${t[0]}" class="${TAB === t[0] ? 'on' : ''}"><b>${t[1]}</b>${t[2]}</button>`).join('')}</nav>`;
-  a.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { TAB = b.dataset.tab; SUB = null; stopSpeech(); DLG_RUN++; render(); window.scrollTo(0, 0); });
+  a.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { TAB = b.dataset.tab; SUB = null; stopSpeech(); DLG_RUN++; render(); window.scrollTo(0, 0); if (TAB === 'road') roadScroll(); });
   bind(a); prefetchIn(a);
 }
 function ring(p, label) {
@@ -688,7 +701,7 @@ function progressCard() {
 function vToday() {
   const L = nextLesson(), due = dueList().length, cl = curLevel(), g = nextGrammar(), mc = missCount(), st = streakNow();
   const hr = new Date().getHours(), greet = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
-  const tg = dayTarget(), left = Math.max(0, tg - newToday()), n = Math.min(SESSION_NEW, left), FL = n ? LESSONS[LESSONS.indexOf(L)] : null;
+  const tg = dayTarget(), left = Math.max(0, tg - newToday()), n = Math.min(sessionNew(), left), FL = n ? LESSONS[LESSONS.indexOf(L)] : null;
   return `<div class="topbar"><div class="eyebrow">english · a1 → c2</div><div class="chip gold">🔥 ${st}</div></div><div class="h1">${greet}, ${esc(ME.name)}!</div>
   <button class="card tap glow" id="daily" style="margin-top:14px">
     ${lab("today's lesson", 'درس امروز')}
@@ -750,38 +763,79 @@ function vListen() {
   <div class="sec"><span class="eyebrow">dialogues · ${UNITS.length}</span></div>
   ${UNITS.map(u => `<button class="card tap" data-dlg="${u.id}" style="margin:6px 0"><div class="row">${lvChip(u.lv)}<div class="grow"><div class="h3">${u.i} ${esc(u.d.t)}</div><div class="xs">${esc(u.t)}</div></div><span class="xs">${ST.dlg[u.id] ? '<span class="done-mark">✓</span>' : '▶'}</span></div></button>`).join('')}`;
 }
+function paceCard() {
+  const p = myPace(), tg = dayTarget(), nt = newToday();
+  return `<div class="card pace"><div class="between"><div>${lab('new words per day', 'واژهٔ جدید در روز')}</div><b class="pacev">${p || tg || 30}</b></div>
+    <input type="range" id="pace" min="10" max="100" step="5" value="${p || tg || 30}" aria-label="new words per day">
+    <div class="between xs"><span>10</span><span>${p ? 'your choice' : 'recommended: 30 to the end of B1, then 20'}</span><span>100</span></div>
+    ${p ? `<button class="chip blue" id="pacerec" style="margin-top:8px">↺ Back to recommended (30, then 20)</button>` : ''}
+    <div class="sm" style="margin-top:8px">Today: ${Math.min(nt, tg)} / ${tg} new words · sessions of up to ${sessionNew()} new words${nextLesson() ? ' · about ' + fmt(daysLeft()) + ' days to finish C2' : ''}</div>
+    <div class="fa sm">امروز: ${faNum(Math.min(nt, tg))} از ${faNum(tg)} واژهٔ جدید${nextLesson() ? '؛ حدود ' + faNum(daysLeft()) + ' روز تا پایان C2' : ''}</div></div>`;
+}
+const LV_ICON = { A1: '🌱', A2: '🌿', B1: '🌳', B2: '⛰️', C1: '🏔️', C2: '👑' };
+function roadPath(n, H) {   // a winding trail through the unit stops (x in %, y in px)
+  const P = i => [50 + 27 * Math.sin(i * .9), 56 + i * 96];
+  let d = '';
+  for (let i = 0; i < n; i++) { const [x, y] = P(i); if (!i) { d = `M${x} ${y}`; continue; } const [px, py] = P(i - 1); d += ` C${px} ${py + 48} ${x} ${y - 48} ${x} ${y}`; }
+  return { P, d };
+}
 function vRoad() {
-  const L = nextLesson(), cur = L ? L.lv : 'C2', open = ROAD_OPEN || cur, gl = GRAMMAR.filter(g => gramLearned(g.id)).length;
-  return `${lab('roadmap', 'نقشهٔ راه')}<div class="h1">Road to C2</div><div class="fa" style="color:var(--dim);font-size:15px">از صفر تا سطح C2 (چارچوب اروپایی CEFR). هر سطح با واژگان، دستور، مکالمه و شنیداری کامل می‌شود.</div>
-  ${progressCard()}
-  <div class="card"><div class="row"><div class="stat"><b>${gl}<small> / ${GRAMMAR.length}</small></b><span class="xs">grammar lessons</span><span class="xs fa c">درس دستور</span></div><div class="stat"><b>${UNITS.filter(u => ST.dlg[u.id]).length}<small> / ${UNITS.length}</small></b><span class="xs">dialogues</span><span class="xs fa c">مکالمه</span></div></div>
-    <div class="sm" style="margin-top:12px">Daily pace: 30 new words a day until the end of B1, then 20 a day until the end of C2.${L ? ' At this pace, about ' + fmt(daysLeft()) + ' days to finish C2.' : ''}</div>
-    <div class="fa sm" style="margin-top:4px">برنامهٔ روزانه: تا پایان B1 روزی ۳۰ واژهٔ جدید، و بعد تا پایان C2 روزی ۲۰ واژه.${L ? ' با این سرعت حدود ' + faNum(daysLeft()) + ' روز تا پایان C2.' : ''}</div>
-    ${L ? `<button class="btn" id="daily" style="margin-top:14px">▶ Continue · lesson ${lessonIdx(L) + 1}</button>` : ''}</div>
-  <div class="road" style="margin-top:14px">${ROAD.map(r => {
-    const s = levelStats(r.lv), done = s.pct >= .9, Ls = LESSONS.filter(x => x.lv === r.lv), ld = Ls.filter(lessonDone).length, isOpen = open === r.lv;
-    return `<div class="card lv-${r.lv} ${done ? 'done' : ''}">
-    <button class="lvhead" data-lvl="${r.lv}"><div class="between"><div class="row"><span class="lvchip lv-${r.lv}" style="font-size:13px">${r.lv}</span><b>${esc(r.t)}</b></div><span>${done ? '<span class="done-mark">✓</span>' : r.lv === cur ? '<span class="chip blue">you are here</span>' : ''} ${isOpen ? '▾' : '▸'}</span></div>
-    <div class="fa" style="color:var(--dim);font-size:14px;margin-top:2px">${esc(r.fa)}</div>
-    <div class="bar ${done ? 'gold' : ''}" style="margin-top:10px"><i style="width:${Math.round(100 * s.pct)}%"></i></div>
-    <div class="xs" style="margin-top:6px">${ld}/${Ls.length} lessons · ${s.sw}/${s.ws} words · ${s.kg}/${s.gs} grammar · ${s.dl}/${s.us} dialogues · about ${r.hours} study hours</div></button>
-    ${isOpen ? `<div class="lessons">${Ls.map(x => { const u = UMAP[x.u], d = lessonDone(x), now = x === L; return `<button class="lsn ${d ? 'd' : ''} ${now ? 'now' : ''}" data-lsn="${x.u}"><span class="n">${lessonIdx(x) + 1}</span><span class="grow"><span class="t">${u.i} ${esc(lessonTitle(x))}</span><span class="fa xs">${esc(u.fa)}</span></span><span class="xs">${d ? '<span class="done-mark">✓</span>' : now ? '▶' : x.words.filter(id => ST.cards[id]).length + '/' + x.words.length}</span></button>`; }).join('')}</div>
-    <details style="margin-top:12px"><summary class="eyebrow">you will be able to</summary><div class="fa eyfa">خواهید توانست</div>${r.can.map(c => `<div class="rule"><div>✔︎ ${esc(c[0])}</div><div class="fa" style="color:var(--dim);font-size:14px">${esc(c[1])}</div></div>`).join('')}
-    <div style="margin-top:10px">${lab('outside the app', 'بیرون از برنامه')}</div>${r.out.map(c => `<div class="rule"><div>• ${esc(c[0])}</div><div class="fa" style="color:var(--dim);font-size:14px">${esc(c[1])}</div></div>`).join('')}</details>` : ''}</div>`;
-  }).join('')}</div>
+  const L = nextLesson(), cur = L ? L.lv : null, ld = lessonsDone(), wl = seenWords().length, gl = GRAMMAR.filter(g => gramLearned(g.id)).length, pct = wl / WORDS.length;
+  const r = 44, c = 2 * Math.PI * r;
+  return `<div class="rhero">
+    <div class="between"><div><div class="eyebrow" style="color:#DCE6FF">your road to C2</div><div class="fa eyfa" style="color:#C9D6FF">مسیر شما تا C2</div></div><div class="chip gold">🔥 ${streakNow()}</div></div>
+    <div class="row" style="margin-top:12px;gap:16px"><svg viewBox="0 0 100 100" class="hring"><circle cx="50" cy="50" r="${r}" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="9"/><circle cx="50" cy="50" r="${r}" fill="none" stroke="url(#hg)" stroke-width="9" stroke-linecap="round" stroke-dasharray="${Math.max(.5, c * pct)} ${c}" transform="rotate(-90 50 50)"/><defs><linearGradient id="hg"><stop offset="0" stop-color="#F6E3A6"/><stop offset="1" stop-color="#E2BE5A"/></linearGradient></defs><text x="50" y="47" text-anchor="middle" font-size="22" font-weight="900" fill="#fff">${Math.round(pct * 100)}%</text><text x="50" y="64" text-anchor="middle" font-size="10" fill="#C9D6FF">of C2</text></svg>
+      <div class="grow"><div class="hbig">${L ? `Lesson ${lessonIdx(L) + 1}` : 'Road complete!'}<small> / ${LESSONS.length}</small></div><div class="hsub">${L ? `${LV_ICON[L.lv]} ${L.lv} · ${esc(UMAP[L.u].t)}` : '🏁 Keep reviewing to stay fluent'}</div></div></div>
+    <div class="hstats"><div><b>${fmt(wl)}</b><span>/ ${fmt(WORDS.length)} words</span><i class="fa">واژه</i></div><div><b>${fmt(ld)}</b><span>/ ${LESSONS.length} lessons</span><i class="fa">درس</i></div><div><b>${gl}</b><span>/ ${GRAMMAR.length} grammar</span><i class="fa">دستور</i></div></div>
+    ${L ? `<button class="btn gold" id="daily">▶ ${newToday() >= dayTarget() ? 'Review today' : 'Continue learning'}</button>` : ''}</div>
+  ${paceCard()}
+  ${ROAD.map(rd => {
+    const lv = rd.lv, us = UNITS.filter(u => u.lv === lv), s = levelStats(lv), Ls = LESSONS.filter(x => x.lv === lv), ldn = Ls.filter(lessonDone).length;
+    const state = ldn === Ls.length ? 'done' : lv === cur ? 'now' : LEVELS.indexOf(lv) < LEVELS.indexOf(cur || 'C2') ? 'done' : 'later';
+    const H = 56 + us.length * 96, { P, d } = roadPath(us.length, H);
+    const curU = L && L.lv === lv ? us.findIndex(u => u.id === L.u) : -1, doneN = state === 'done' ? us.length - 1 : Math.max(0, curU);
+    const dd = roadPath(doneN + 1, H).d;
+    return `<section class="lvl lv-${lv} ${state}" id="lvl-${lv}">
+      <div class="lvbanner"><div class="lvbadge">${LV_ICON[lv]}<b>${lv}</b></div><div class="grow"><div class="h3" style="color:#fff">${esc(rd.t)}</div><div class="fa" style="color:rgba(255,255,255,.85);font-size:14px">${esc(rd.fa)}</div>
+        <div class="bar" style="margin-top:8px;background:rgba(255,255,255,.25)"><i style="width:${Math.round(100 * ldn / Ls.length)}%;background:#fff"></i></div><div class="xs" style="color:rgba(255,255,255,.9);margin-top:4px">${ldn}/${Ls.length} lessons · ${s.sw}/${s.ws} words · ${s.kg}/${s.gs} grammar · ${rd.hours} h</div></div>${state === 'done' ? '<span class="lvdone">✓</span>' : ''}</div>
+      <details class="cando"><summary>What you'll be able to do</summary><div class="fa eyfa">چه کارهایی از شما برمی‌آید</div>${rd.can.map(x => `<div class="rule"><div>✔︎ ${esc(x[0])}</div><div class="fa" style="color:var(--dim);font-size:14px">${esc(x[1])}</div></div>`).join('')}<div style="margin-top:10px">${lab('outside the app', 'بیرون از برنامه')}</div>${rd.out.map(x => `<div class="rule"><div>• ${esc(x[0])}</div><div class="fa" style="color:var(--dim);font-size:14px">${esc(x[1])}</div></div>`).join('')}</details>
+      <div class="trail" style="height:${H}px"><svg viewBox="0 0 100 ${H}" preserveAspectRatio="none"><path d="${d}" class="tr"/>${state !== 'later' ? `<path d="${dd}" class="tr on"/>` : ''}</svg>
+      ${us.map((u, i) => { const [x, y] = P(i), uls = Ls.filter(l => l.u === u.id), n = uls.filter(lessonDone).length, done = n === uls.length, now = L && L.u === u.id;
+        return `<button class="stop ${done ? 'done' : now ? 'now' : n ? 'part' : ''}" data-stop="${u.id}" style="left:${x}%;top:${y}px">${now ? '<span class="startb ' + (x > 50 ? 'l' : 'r') + '">START</span>' : ''}<span class="ico">${u.i}</span>${done ? '<span class="tick">✓</span>' : ''}<span class="nlab">${esc(u.t.replace(/^Essential words \d+ · /, '').replace(/ · part \d+$/, ''))}</span><span class="dots">${uls.map(l => `<i class="${lessonDone(l) ? 'd' : l === L ? 'n' : ''}"></i>`).join('')}</span></button>`; }).join('')}</div>
+      <div class="milestone">${state === 'done' ? '🏆' : '🏁'} ${lv} ${state === 'done' ? 'complete' : 'finish line'}</div></section>`;
+  }).join('')}
   <div class="card"><div class="h3">Honest note</div><div class="fa" style="font-size:14px;color:var(--dim)">یادداشت صادقانه</div><div class="sm" style="margin-top:6px">The app covers the vocabulary, grammar, listening and pronunciation core for each level. Real C1–C2 also needs free conversation with people and corrected writing — plan those from B1 onwards.</div><div class="fa" style="margin-top:6px;font-size:14px;color:var(--dim)">این برنامه هستهٔ واژگان، دستور، شنیداری و تلفظ هر سطح را پوشش می‌دهد. برای C1 و C2 واقعی، مکالمهٔ آزاد با افراد و نوشتن با تصحیح هم لازم است؛ از سطح B1 آن‌ها را برنامه‌ریزی کنید.</div></div>`;
+}
+function roadScroll() { setTimeout(() => { const n = document.querySelector('.stop.now'); if (n && n.scrollIntoView) { const r = n.getBoundingClientRect(); if (r.top > innerHeight * .8 || r.top < 0) window.scrollTo({ top: window.scrollY + r.top - innerHeight * .45, behavior: 'smooth' }); } }, 400); }
+function stopSheet(id) {
+  const u = UMAP[id], L = nextLesson(), uls = LESSONS.filter(l => l.u === id);
+  const sh = el('div', 'sheet', `<div class="sheetbox"><div class="row"><span style="font-size:44px">${u.i}</span><div class="grow"><div class="h2">${esc(u.t)}</div><div class="fa" style="color:var(--dim)">${esc(u.fa)}</div></div>${lvChip(u.lv)}</div>
+    <div class="card" style="padding:6px 14px">${uls.map(l => { const d = lessonDone(l), n = l.words.filter(x => ST.cards[x]).length; return `<div class="list-item"><span class="lsnn ${d ? 'd' : l === L ? 'n' : ''}">${lessonIdx(l) + 1}</span><div class="grow"><b>Lesson ${lessonIdx(l) + 1}</b><div class="xs">${l.words.map(x => esc(WMAP[x].w)).join(', ')}</div></div><span class="xs">${d ? '<span class="done-mark">✓</span>' : n + '/' + l.words.length}</span></div>`; }).join('')}</div>
+    <div class="sm">💬 Dialogue: ${esc(u.d.t)}${ST.dlg[id] ? ' ✓' : ''}</div><div class="fa sm">${esc(u.d.fa)}</div>
+    ${L && L.u === id ? '<button class="btn" id="shgo" style="margin-top:14px">▶ Start this lesson</button>' : ''}
+    <div class="row" style="margin-top:10px"><button class="btn ghost sm" id="shw">📚 Words</button><button class="btn ghost sm" id="shd">🎧 Dialogue</button></div>
+    <button class="btn line sm" id="shx" style="margin-top:10px">Close</button></div>`);
+  document.body.appendChild(sh);
+  const close = () => sh.remove();
+  sh.onclick = e => { if (e.target === sh) close(); };
+  sh.querySelector('#shx').onclick = close;
+  sh.querySelector('#shw').onclick = () => { close(); TAB = 'words'; SUB = id; render(); window.scrollTo(0, 0); };
+  sh.querySelector('#shd').onclick = () => { close(); TAB = 'listen'; SUB = id; render(); window.scrollTo(0, 0); };
+  const go = sh.querySelector('#shgo'); if (go) go.onclick = () => { close(); startSession(buildDaily(), 'Daily'); };
 }
 function vYou() {
   return `${lab('profile', 'نمایه')}<div class="row" style="margin-top:6px"><span class="av" style="width:56px;height:56px;font-size:24px">${esc(ME.name[0].toUpperCase())}</span><div class="grow"><div class="h2">${esc(ME.name)} ${ME.owner ? '<span class="chip gold">OWNER</span>' : ''}</div><div class="xs">${seenWords().length} words · ${GRAMMAR.filter(g => gramLearned(g.id)).length} grammar lessons · best streak ${ST.streak.best || 0} days</div></div></div>
-  <div class="sec">${lab('daily pace', 'برنامهٔ روزانه')}</div><div class="card"><div class="sm">30 new words a day until the end of B1, then 20 a day until the end of C2, in sessions of up to ${SESSION_NEW} new words. Today: ${Math.min(newToday(), dayTarget())} / ${dayTarget()}.</div><div class="fa sm" style="margin-top:4px">تا پایان B1 روزی ۳۰ واژه، سپس تا پایان C2 روزی ۲۰ واژه؛ هر جلسه حداکثر ${faNum(SESSION_NEW)} واژهٔ جدید.</div></div>
-  <div class="sec">${lab('voice', 'صدا')}</div><div class="card">
-    <div class="sm">American voices, recorded with high-quality neural voices. Tap one to hear it.</div><div class="fa sm" style="margin-top:2px">صداهای آمریکایی ضبط‌شده با کیفیت بالا. برای شنیدن روی هر کدام بزنید.</div>
-    <div class="xs" style="margin-top:12px">Women</div><div class="xs fa">زن</div><div class="seg">${VOICE_LIST.filter(x => x[2] === 'f').map(x => `<button data-voice="${x[0]}" class="${mainVoice() === x[0] ? 'on' : ''}">👩 ${x[1]}</button>`).join('')}</div>
-    <div class="xs" style="margin-top:10px">Men</div><div class="xs fa">مرد</div><div class="seg">${VOICE_LIST.filter(x => x[2] === 'm').map(x => `<button data-voice="${x[0]}" class="${mainVoice() === x[0] ? 'on' : ''}">👨 ${x[1]}</button>`).join('')}</div>
+  <div class="sec">${lab('daily pace', 'برنامهٔ روزانه')}</div>${paceCard()}
+  <div class="sec">${lab('voices', 'صداها')}</div><div class="card">
+    <div class="sm">12 recorded American voices. Choose your default woman and default man; tap a name to hear it.</div><div class="fa sm" style="margin-top:2px">۱۲ صدای آمریکایی ضبط‌شده. صدای پیش‌فرض زن و مرد را انتخاب کنید؛ با زدن هر نام صدایش را می‌شنوید.</div>
+    <div class="xs" style="margin-top:12px">Default woman</div><div class="xs fa">صدای زن پیش‌فرض</div><div class="vgrid">${VOICE_LIST.filter(x => x[2] === 'f').map(x => `<button data-vf="${x[0]}" class="${womanVoice() === x[0] ? 'on' : ''}"><b>👩 ${x[1]}</b><span>${x[3]}</span></button>`).join('')}</div>
+    <div class="xs" style="margin-top:12px">Default man</div><div class="xs fa">صدای مرد پیش‌فرض</div><div class="vgrid">${VOICE_LIST.filter(x => x[2] === 'm').map(x => `<button data-vm="${x[0]}" class="${manVoice() === x[0] ? 'on' : ''}"><b>👨 ${x[1]}</b><span>${x[3]}</span></button>`).join('')}</div>
+    <div class="xs" style="margin-top:14px">Words and example sentences</div><div class="xs fa">واژه‌ها و جمله‌های نمونه</div><div class="seg">${[['f', '👩 Woman'], ['m', '👨 Man'], ['mix', '👩👨 Both']].map(x => `<button data-wv="${x[0]}" class="${(ST.wv || 'mix') === x[0] ? 'on' : ''}">${x[1]}</button>`).join('')}</div>
+    <label class="tgl"><input type="checkbox" id="rnd" ${ST.rnd ? 'checked' : ''}><span><b>Different voices in conversations and listening</b><span class="xs" style="display:block">Each dialogue and story gets random voices of the right gender. Off: your two default voices.</span><span class="xs fa">هر مکالمه و داستان با صداهای تصادفی پخش می‌شود. خاموش: همان دو صدای پیش‌فرض.</span></span></label>
     <div class="sm" style="margin-top:12px">Speed</div>${speedSeg()}
     <button class="btn ghost sm" id="vtest" style="margin-top:10px">🔊 Test: "Hello, nice to meet you."</button>
-    <div class="xs" style="margin-top:8px">Recordings: ${AKEYS ? fmt(AKEYS.size) + ' phrases ready' : esc(AKEY_STATE || 'not loaded')} · voice ${esc(voiceName(mainVoice()))}${AVOICE[mainVoice()] && AVOICE[mainVoice()].d ? ' ready' : ' loading'}${AUDIO_ERR ? ' · last problem: ' + esc(AUDIO_ERR) : ''}. Dialogues use a woman's and a man's voice by speaker. If you hear nothing, turn off silent mode and turn the volume up.</div>
-    <div class="fa" style="font-size:13px;color:var(--dim);margin-top:6px">در مکالمه‌ها هر گوینده با صدای زن یا مرد خودش پخش می‌شود. اگر صدایی نمی‌شنوید، حالت بی‌صدا را خاموش و صدا را زیاد کنید.</div></div>
+    <div class="xs" style="margin-top:8px">Recordings: ${AKEYS ? fmt(AKEYS.size) + ' phrases ready' : esc(AKEY_STATE || 'not loaded')}${AUDIO_ERR ? ' · last problem: ' + esc(AUDIO_ERR) : ''}. If you hear nothing, turn off silent mode and turn the volume up.</div>
+    <div class="fa" style="font-size:13px;color:var(--dim);margin-top:6px">اگر صدایی نمی‌شنوید، حالت بی‌صدا را خاموش و صدا را زیاد کنید.</div></div>
   ${ME.owner ? ownerCard() : ''}
   <div class="sec"><span class="eyebrow">app & backup</span></div><div class="card">
     <div class="between"><div><div class="h3">Version</div><div class="xs">${esc(BUILD)}</div></div><button class="btn ghost sm inl" id="chk">Check for update</button></div>
@@ -824,9 +878,14 @@ function bind(a) {
   on('[data-dplay]', b => playDialogue(UMAP[b.dataset.dplay], $('#dscope')));
   on('[data-dtest]', b => { const u = UMAP[b.dataset.dtest]; stopSpeech(); DLG_RUN++; startSession(u.d.q.map((_, k) => dlgQuestion(u, k)), u.d.t); });
   on('[data-pass]', b => { const P = LISTEN.find(x => x.id === b.dataset.pass); startSession([passageCard(P), ...P.q.map((_, k) => passageQ(P, k))], P.t); });
-  on('[data-voice]', b => { ST.voice = b.dataset.voice; save(); loadVoice(ST.voice); render(); say('Hello, nice to meet you.', { v: ST.voice }); });
-  on('[data-lvl]', b => { const L = nextLesson(), cur = L ? L.lv : 'C2', open = ROAD_OPEN || cur; ROAD_OPEN = open === b.dataset.lvl ? 'none' : b.dataset.lvl; render(); });
-  on('[data-lsn]', b => { TAB = 'words'; SUB = b.dataset.lsn; render(); window.scrollTo(0, 0); });
+  const keepY = f => { const y = window.scrollY; f(); render(); window.scrollTo(0, y); };
+  on('[data-vf]', b => keepY(() => { ST.vf = b.dataset.vf; save(); say('Hello, nice to meet you.', { v: ST.vf }); }));
+  on('[data-vm]', b => keepY(() => { ST.vm = b.dataset.vm; save(); say('Hello, nice to meet you.', { v: ST.vm }); }));
+  on('[data-wv]', b => keepY(() => { ST.wv = b.dataset.wv; save(); }));
+  const rc = a.querySelector('#rnd'); if (rc) rc.onchange = () => { ST.rnd = rc.checked; save(); };
+  const pr = a.querySelector('#pace'); if (pr) { pr.oninput = () => { const v = a.querySelector('.pacev'); if (v) v.textContent = pr.value; }; pr.onchange = () => keepY(() => { ST.pace = +pr.value; save(); toast(pr.value + ' new words a day'); }); }
+  on('#pacerec', () => keepY(() => { ST.pace = 0; save(); toast('Recommended pace: 30, then 20'); }));
+  on('[data-stop]', b => stopSheet(b.dataset.stop));
   bindSpeed(a);
   on('#vtest', () => say('Hello, nice to meet you.'));
   on('#chk', () => checkUpdate(true));
@@ -917,8 +976,9 @@ function chooserUI() {
 }
 function enter(p) {
   ME = p; ST = loadState(p.id); S.set('en.primary', p.id);
-  $('#gate').style.display = 'none'; $('#app').style.display = 'block'; TAB = 'road'; SUB = null; ROAD_OPEN = null;
-  loadKeys(); loadVoice(mainVoice()); loadVoice(genderVoice(mainVoice()[0] !== 'm')); render();
+  $('#gate').style.display = 'none'; $('#app').style.display = 'block'; TAB = 'road'; SUB = null;
+  if (!ST.vset) { if (isVoice(ST.voice, 'm')) ST.vm = ST.voice; else if (isVoice(ST.voice, 'f')) ST.vf = ST.voice; ST.vset = 1; save(); }   // b14 had one voice
+  loadKeys(); loadVoice(womanVoice()); loadVoice(manVoice()); render(); roadScroll();
   audioSession(); loadVoices();
 }
 

@@ -162,3 +162,61 @@ details summary{cursor:pointer;list-style:none}
 details summary::-webkit-details-marker{display:none}
 details summary::after{content:" ▸"}
 details[open] summary::after{content:" ▾"}
+/* b15: the road as a journey — hero card, level banners, a winding trail of unit stops */
+.rhero{position:relative;overflow:hidden;border-radius:26px;padding:18px;margin:6px 0 12px;color:#fff;background:radial-gradient(120% 90% at 100% 0%,rgba(241,216,138,.35),transparent 55%),linear-gradient(150deg,#2F5BD3,#1C3F94 60%,#0F2A6B);box-shadow:0 16px 40px rgba(28,63,148,.35)}
+.rhero::after{content:"";position:absolute;right:-30px;bottom:-40px;width:160px;height:160px;border-radius:50%;background:rgba(255,255,255,.06)}
+.hring{width:104px;height:104px;flex:none}
+.hbig{font-size:30px;font-weight:900;letter-spacing:-.02em;line-height:1.1}
+.hbig small{font-size:15px;opacity:.75;font-weight:700}
+.hsub{font-size:14px;opacity:.9;margin-top:4px}
+.hstats{display:flex;gap:8px;margin:14px 0 12px}
+.hstats>div{flex:1;background:rgba(255,255,255,.12);border-radius:14px;padding:8px 6px;text-align:center}
+.hstats b{display:block;font-size:18px}
+.hstats span{display:block;font-size:10.5px;opacity:.85}
+.hstats i{display:block;font-style:normal;font-size:11px;opacity:.85;text-align:center}
+.btn.gold{background:var(--goldgrad);color:#4A3608;box-shadow:0 8px 22px rgba(226,190,90,.45)}
+.pace input[type=range]{width:100%;margin:12px 0 2px;accent-color:var(--ink2);height:28px}
+.pacev{font-size:28px;color:var(--ink);font-weight:900}
+.lvl{margin:22px 0 8px}
+.lvbanner{display:flex;align-items:center;gap:12px;padding:14px;border-radius:22px;background:linear-gradient(140deg,var(--lc),color-mix(in srgb,var(--lc) 70%,#000));box-shadow:0 10px 26px color-mix(in srgb,var(--lc) 35%,transparent)}
+.lvl.later .lvbanner{filter:saturate(.55) brightness(1.05)}
+.lvbadge{flex:none;width:58px;height:58px;border-radius:18px;background:rgba(255,255,255,.18);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px;line-height:1}
+.lvbadge b{font-size:15px;color:#fff;margin-top:3px}
+.lvdone{flex:none;width:30px;height:30px;border-radius:50%;background:var(--goldgrad);color:#4A3608;display:flex;align-items:center;justify-content:center;font-weight:900}
+.cando{margin:8px 4px}
+.cando summary{font-size:13px;font-weight:700;color:var(--ink2)}
+.trail{position:relative;margin-top:4px}
+.trail svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.trail .tr{fill:none;stroke:color-mix(in srgb,var(--lc) 22%,#DDE4F3);stroke-width:10;stroke-linecap:round;vector-effect:non-scaling-stroke;stroke-dasharray:2 16}
+.trail .tr.on{stroke:var(--lc);stroke-dasharray:none;opacity:.55}
+.stop{position:absolute;transform:translate(-50%,-50%);width:66px;height:66px;border-radius:50%;background:#fff;border:3px solid color-mix(in srgb,var(--lc) 30%,#E3E9F6);box-shadow:0 6px 0 color-mix(in srgb,var(--lc) 25%,#D5DDEE),0 10px 18px rgba(28,63,148,.12);display:flex;align-items:center;justify-content:center}
+.stop .ico{font-size:30px;line-height:1;filter:grayscale(.6);opacity:.75}
+.stop.part .ico,.stop.done .ico,.stop.now .ico{filter:none;opacity:1}
+.stop.done{border-color:var(--gold-l);background:linear-gradient(160deg,#fff,var(--gold-bg));box-shadow:0 6px 0 #E2BE5A,0 10px 18px rgba(226,190,90,.25)}
+.stop.now{width:82px;height:82px;border-color:var(--lc);box-shadow:0 7px 0 color-mix(in srgb,var(--lc) 70%,#000),0 0 0 8px color-mix(in srgb,var(--lc) 18%,transparent);animation:pulse 1.8s ease-in-out infinite}
+.stop.now .ico{font-size:38px}
+@keyframes pulse{0%,100%{box-shadow:0 7px 0 color-mix(in srgb,var(--lc) 70%,#000),0 0 0 6px color-mix(in srgb,var(--lc) 22%,transparent)}50%{box-shadow:0 7px 0 color-mix(in srgb,var(--lc) 70%,#000),0 0 0 14px color-mix(in srgb,var(--lc) 6%,transparent)}}
+.stop .tick{position:absolute;right:-4px;top:-4px;width:22px;height:22px;border-radius:50%;background:var(--goldgrad);color:#4A3608;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center}
+.stop .startb{position:absolute;top:50%;transform:translateY(-50%);background:var(--lc);color:#fff;font-size:11px;font-weight:900;letter-spacing:.1em;padding:4px 10px;border-radius:10px;white-space:nowrap}
+.stop .startb.r{left:calc(100% + 12px)}.stop .startb.l{right:calc(100% + 12px)}
+.stop .startb::after{content:"";position:absolute;top:50%;transform:translateY(-50%);border:6px solid transparent}
+.stop .startb.r::after{left:-11px;border-right-color:var(--lc)}.stop .startb.l::after{right:-11px;border-left-color:var(--lc)}
+.stop .nlab{position:absolute;top:calc(100% + 10px);left:50%;transform:translateX(-50%);width:120px;text-align:center;font-size:11px;font-weight:700;color:var(--dim);line-height:1.2;pointer-events:none}
+.stop.now .nlab{color:var(--ink-dd)}
+.stop .dots{position:absolute;bottom:-1px;left:50%;transform:translate(-50%,50%);display:flex;gap:3px}
+.stop .dots i{width:7px;height:7px;border-radius:50%;background:#D5DDEE;border:1.5px solid #fff}
+.stop .dots i.d{background:#E2BE5A}.stop .dots i.n{background:var(--lc)}
+.milestone{margin:30px auto 0;width:max-content;max-width:100%;padding:8px 16px;border-radius:999px;background:var(--panel);border:1px solid var(--line2);font-weight:800;color:var(--ink-dd);font-size:14px}
+.lvl.done .milestone{background:var(--gold-bg);border-color:var(--gold-l);color:var(--gold)}
+.sheet{position:fixed;inset:0;z-index:50;background:rgba(15,31,71,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheetbox{width:100%;max-width:560px;max-height:85vh;overflow:auto;background:var(--bg);border-radius:26px 26px 0 0;padding:20px 16px calc(20px + var(--sab));animation:up .25s ease-out}
+@keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+.lsnn{flex:none;min-width:30px;height:26px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;background:var(--ink-d);color:var(--ink)}
+.lsnn.d{background:var(--gold-bg);color:var(--gold)}.lsnn.n{background:var(--ink);color:#fff}
+.vgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px}
+.vgrid button{padding:8px 4px;border-radius:12px;background:var(--ink-d);color:var(--ink-dd);text-align:center}
+.vgrid button b{display:block;font-size:13px}
+.vgrid button span{display:block;font-size:10.5px;color:var(--dim)}
+.vgrid button.on{background:var(--ink);color:#fff}.vgrid button.on span{color:#DCE6FF}
+.tgl{display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-size:14px}
+.tgl input{width:22px;height:22px;flex:none;margin-top:2px;accent-color:var(--ink2)}

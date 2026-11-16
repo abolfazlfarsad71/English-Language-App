@@ -6,7 +6,7 @@ home screen from Safari. Built on the model of the Dutch app (`abolfazlfarsad71/
 
 **Open:** https://abolfazlfarsad71.github.io/English-Language-App/
 
-## What is inside (build b14)
+## What is inside (build b15)
 - **Road to C2:** 297 topic units (A1 28 · A2 40 · B1 63 · B2 90 · C1 56 · C2 20), split into 8-word lessons; idiom units alternate with topic units.
 - **5,680 words and phrases** (about 920 idioms) with Farsi meaning, English synonyms, a practical example sentence + Farsi translation, and an
   emoji only where it shows exactly the word (others get a clean letter tile). New-word card floats in 3-D.
@@ -18,12 +18,14 @@ home screen from Safari. Built on the model of the Dutch app (`abolfazlfarsad71/
   cloze practice → the unit dialogue heard blind when a unit is finished. Wrong answers come back 3 cards later and
   stay in "your mistakes" until answered right in two later sessions.
 - Exercise types: meaning (EN→FA), FA→EN, listen-and-choose, fill the gap, typing, synonyms.
-- **Recorded American voices** (b14): every word, example, dialogue line, grammar sentence, listening text and sound pair
-  (13,750 phrases) recorded with 6 Piper neural voices: women Emma (lessac), Amy (amy), Hannah (hfc_female); men Ryan (ryan),
-  Joe (joe), Henry (hfc_male), all `en_US-*-medium`. Dialogues use a woman's or man's voice per speaker. The phone voice is
-  only a fallback (iOS 27 Safari no longer starts web speech reliably).
-- **Daily pace:** 30 new words a day until the end of B1, then 20 a day to the end of C2, in sessions of up to 10 new words.
-- **Road is the first tab:** A1→C2 with every lesson, lessons done / total and words learned / total.
+- **12 recorded American voices** (b15): every word, example, dialogue line, grammar sentence, listening text and sound pair
+  (13,772 phrases). Women: Olivia, Emma, Hannah, Grace, Lily, Sophie; men: James, Joe, Mike, David, Henry, Ryan (ordered by
+  measured pitch). Sources: Piper `en_US` medium voices lessac (Emma), hfc_female (Hannah), ryan, joe, hfc_male (Henry), and
+  speakers 383 (Olivia), 773 (Grace), 444 (Lily), 29 (Sophie), 805 (James), 518 (Mike), 868 (David) of `en_US-libritts_r-medium`,
+  chosen from all 904 speakers by pitch spread. The learner picks a default woman and man; words use the woman, the man or both;
+  dialogues and stories can use random voices of the right gender. The phone voice is only a fallback.
+- **Daily pace:** recommended 30 new words a day until the end of B1, then 20; the learner can set 10–100 a day.
+- **Road (first tab):** a winding trail of unit stops per level with progress, a START marker and a sheet per unit.
 
 ### Removed duplication compared with the Dutch app
 One dialogue per unit (the Dutch app had lesson dialogues, unit conversations and role-plays covering the same
@@ -50,12 +52,13 @@ Never renumber word ids (`u03-5`) or unit/grammar ids: they are keys in saved pr
 
 ## Audio (audio/)
 - `keys.json` = every spoken text, normalised (trimmed, whitespace collapsed, lower-case), in a fixed order.
+- Voice ids: f1 Emma, f2 Olivia, f3 Hannah, f4 Grace, f5 Lily, f6 Sophie, m1 Ryan, m2 Joe, m3 Henry, m4 James, m5 Mike, m6 David.
 - `<voice>.json` = `{bps: 3000, files, c: [file, startMs, endMs, …]}` aligned with keys (`-1` = not recorded).
 - `<voice>-<n>.mp3` = CBR 24 kbps MPEG-2 Layer III, 22.05 kHz mono, no ID3/Xing header, clips in 300 ms of silence,
   so a clip is fetched as a byte range: byte = ms / 1000 × 3000 (times already include the 50 ms encoder delay).
 - Made outside the repo in `../02. Audio`: `export.cjs` (texts) → `run-all.sh` / `synth.cjs` (piper 2023.11.14-2 Windows,
   length_scale 1.08; newer voice configs need their multi-character phoneme keys removed) → `bundle.cjs <model> <id>`.
-  When texts change, re-export, record only what is new (finished clips are skipped) and re-bundle all six voices.
+  When texts change, re-export, record only what is new (recordings are stored by a hash of the text, so finished clips are skipped) and re-bundle all six voices.
 
 ## Content sources
 All texts, dialogues and exercises are original, written for this app. The reference books in the owner's folder
@@ -63,6 +66,9 @@ All texts, dialogues and exercises are original, written for this app. The refer
 copyrighted and are **not** copied into this public repository.
 
 ## Change log
+- **b15 (17 nov)** — Road redesigned as a visual journey; words per day adjustable 10–100; 12 clearly different American
+  voices (6 new, Amy dropped as too close to Emma) with a default woman and man and random voices in conversations; 17 dialogues
+  and 17 example sentences rewritten for everyday life (no more legends, battles, space or bombs).
 - **b14 (16 nov)** — recorded American voices (3 women, 3 men) replace the phone voice; Farsi always right-to-left on its
   own line under the English (no more mixed English · Farsi rows); Road is the first tab with every lesson listed and
   lessons/words done out of total; daily pace 30 new words to the end of B1, then 20; greeting no longer hidden under
