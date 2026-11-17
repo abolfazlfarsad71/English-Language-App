@@ -6,7 +6,7 @@ home screen from Safari. Built on the model of the Dutch app (`abolfazlfarsad71/
 
 **Open:** https://abolfazlfarsad71.github.io/English-Language-App/
 
-## What is inside (build b16)
+## What is inside (build b17)
 - **Road to C2:** 297 topic units (A1 28 · A2 40 · B1 63 · B2 90 · C1 56 · C2 20), split into 8-word lessons; idiom units alternate with topic units.
 - **5,680 words and phrases** (about 920 idioms) with Farsi meaning, English synonyms, a practical example sentence + Farsi translation, and an
   emoji only where it shows exactly the word (others get a clean letter tile). New-word card floats in 3-D.
@@ -66,6 +66,10 @@ All texts, dialogues and exercises are original, written for this app. The refer
 copyrighted and are **not** copied into this public repository.
 
 ## Change log
+- **b17 (17 nov)** — every word clip checked with speech recognition (whisper.cpp base.en, `../02. Audio/asrcheck2.cjs`,
+  `asrsuspect.cjs`, `score.cjs`, `retry.cjs`): failed clips re-recorded with new takes and re-checked; clips that still fail are left
+  out of that voice (`asr/drop-<voice>.json`) and the app plays the word in another voice of the same gender. Ryan removed
+  (about 40% of his single words were misheard); David is the default man. 11 voices, 0.91 GB of audio.
 - **b16 (17 nov)** — a conversation for every lesson (461 new everyday lesson talks + 297 unit dialogues = 758, `src/data/talks.json`,
   written in `../03. Talks/*.js`, checked by `talks.cjs`: each uses ≥3 of its lesson's words); a relevant picture for all 5,680
   words; speaking speed 0.6×–1.2× (as in the Dutch app); ‹ back to the previous card; no automatic jump after an answer;

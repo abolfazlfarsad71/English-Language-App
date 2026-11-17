@@ -1,6 +1,6 @@
 'use strict';
 /* English for Persian speakers — A1 → C2. One-file web app (built by build.mjs). */
-const BUILD = '17 nov · b16';
+const BUILD = '17 nov · b17';
 const DAY = 864e5;
 
 /* ------------------------------ data ------------------------------ */
@@ -35,7 +35,7 @@ const PKEY = 'en.profiles';
 let PROFILES = S.get(PKEY, []);
 let ME = null, ST = null;
 function FRESH() {
-  return { v: 1, cards: {}, gram: {}, dlg: {}, lis: {}, miss: {}, days: {}, streak: { last: '', n: 0, best: 0 }, xp: 0, perDay: 30, voice: 'f1', vf: 'f1', vm: 'm1', wv: 'mix', rnd: true, pace: 0, rate: 1, showFa: true, created: Date.now() };
+  return { v: 1, cards: {}, gram: {}, dlg: {}, lis: {}, miss: {}, days: {}, streak: { last: '', n: 0, best: 0 }, xp: 0, perDay: 30, voice: 'f1', vf: 'f1', vm: 'm6', wv: 'mix', rnd: true, pace: 0, rate: 1, showFa: true, created: Date.now() };
 }
 function loadState(id) {
   const st = S.get('en.' + id + '.state', null);
@@ -88,7 +88,7 @@ const lab = (en, fa, style) => `<div class="eyebrow"${style ? ` style="${style}"
 // as a blob on one <audio> element that a silent clip unlocks on the first tap (same method as the Dutch app).
 // 12 voices, ordered from low to high pitch (median pitch measured on a test sentence)
 const VOICE_LIST = [['f2', 'Olivia', 'f', 'lower voice'], ['f1', 'Emma', 'f', 'medium'], ['f3', 'Hannah', 'f', 'medium-high'], ['f4', 'Grace', 'f', 'higher'], ['f5', 'Lily', 'f', 'high'], ['f6', 'Sophie', 'f', 'highest'],
-  ['m4', 'James', 'm', 'deepest'], ['m2', 'Joe', 'm', 'deep'], ['m5', 'Mike', 'm', 'low'], ['m6', 'David', 'm', 'medium'], ['m3', 'Henry', 'm', 'higher'], ['m1', 'Ryan', 'm', 'highest']];
+  ['m4', 'James', 'm', 'deepest'], ['m2', 'Joe', 'm', 'deep'], ['m5', 'Mike', 'm', 'low'], ['m6', 'David', 'm', 'medium'], ['m3', 'Henry', 'm', 'highest']];   // Ryan (m1) was removed in b17: the speech check heard many of his single words wrongly
 const AUDIO_BASE = 'audio/';
 const anorm = t => String(t).trim().replace(/\s+/g, ' ').toLowerCase();
 let AKEYS = null, AKEY_STATE = '', KEYS_P = null, AUDIO_ERR = '', AUDIO_LAST = '';
@@ -113,7 +113,7 @@ function loadVoice(v) {
 }
 const isVoice = (v, g) => VOICE_LIST.some(x => x[0] === v && (!g || x[2] === g));
 const womanVoice = () => ST && isVoice(ST.vf, 'f') ? ST.vf : 'f1';
-const manVoice = () => ST && isVoice(ST.vm, 'm') ? ST.vm : 'm1';
+const manVoice = () => ST && isVoice(ST.vm, 'm') ? ST.vm : 'm6';
 // words and sentences: the default woman, the default man, or both taking turns at random
 let MIXV = null;   // in 'both' mode one of the two default voices is picked per card, so prefetch and playback agree
 const pickMix = () => { MIXV = Math.random() < .5 ? womanVoice() : manVoice(); };
@@ -205,10 +205,18 @@ function say(text, opt) {
   const v = opt.v || (opt.male != null ? genderVoice(opt.male) : mainVoice()), o = Object.assign({}, opt, { v });
   const c = clipOf(text, v);
   if (c) return playClip(c, o, text);
-  if (AKEYS && AVOICE[v] && AVOICE[v].d) return phoneSay(text, o);   // not recorded
+  if (AKEYS && AVOICE[v] && AVOICE[v].d) return sayOther(text, o);   // this voice has no good clip of it
   const run = ++sayWait;   // the recordings index is still loading (first seconds after opening)
-  Promise.all([loadKeys(), loadVoice(v)]).then(() => { if (run !== sayWait) return; const c2 = clipOf(text, v); if (c2) playClip(c2, o, text); else phoneSay(text, o); })
+  Promise.all([loadKeys(), loadVoice(v)]).then(() => { if (run !== sayWait) return; const c2 = clipOf(text, v); if (c2) playClip(c2, o, text); else sayOther(text, o); })
     .catch(() => { if (run === sayWait) phoneSay(text, o); });
+}
+// a clip that failed the speech-recognition check was left out of a voice: use the same text in another voice of the same gender
+function sayOther(text, o) {
+  const g = (VOICE_LIST.find(x => x[0] === o.v) || [, , 'f'])[2], alts = VOICE_LIST.filter(x => x[2] === g && x[0] !== o.v).map(x => x[0]);
+  for (const v of alts) { const c = clipOf(text, v); if (c) return playClip(c, Object.assign({}, o, { v }), text); }
+  const run = ++sayWait, next = alts.find(v => !(AVOICE[v] && AVOICE[v].d));
+  if (!next) return phoneSay(text, o);
+  loadVoice(next).then(() => { if (run !== sayWait) return; const c = clipOf(text, next); if (c) playClip(c, Object.assign({}, o, { v: next }), text); else sayOther(text, o); }).catch(() => { if (run === sayWait) phoneSay(text, o); });
 }
 function stopSpeech() { sayWait++; stopClip(); try { speechSynthesis.cancel(); } catch (e) { } }
 
