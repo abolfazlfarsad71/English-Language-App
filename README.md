@@ -6,7 +6,7 @@ home screen from Safari. Built on the model of the Dutch app (`abolfazlfarsad71/
 
 **Open:** https://abolfazlfarsad71.github.io/English-Language-App/
 
-## What is inside (build b15)
+## What is inside (build b16)
 - **Road to C2:** 297 topic units (A1 28 · A2 40 · B1 63 · B2 90 · C1 56 · C2 20), split into 8-word lessons; idiom units alternate with topic units.
 - **5,680 words and phrases** (about 920 idioms) with Farsi meaning, English synonyms, a practical example sentence + Farsi translation, and an
   emoji only where it shows exactly the word (others get a clean letter tile). New-word card floats in 3-D.
@@ -66,6 +66,11 @@ All texts, dialogues and exercises are original, written for this app. The refer
 copyrighted and are **not** copied into this public repository.
 
 ## Change log
+- **b16 (17 nov)** — a conversation for every lesson (461 new everyday lesson talks + 297 unit dialogues = 758, `src/data/talks.json`,
+  written in `../03. Talks/*.js`, checked by `talks.cjs`: each uses ≥3 of its lesson's words); a relevant picture for all 5,680
+  words; speaking speed 0.6×–1.2× (as in the Dutch app); ‹ back to the previous card; no automatic jump after an answer;
+  stronger reviews (a wrong word restarts at box 1, comes back up to 3 times in the session, and leaves "your mistakes" only after
+  two right answers in later sessions); every clip gets 0.5 s of silent MP3 frames so iPhone Safari does not cut the last sound.
 - **b15 (17 nov)** — Road redesigned as a visual journey; words per day adjustable 10–100; 12 clearly different American
   voices (6 new, Amy dropped as too close to Emma) with a default woman and man and random voices in conversations; 17 dialogues
   and 17 example sentences rewritten for everyday life (no more legends, battles, space or bombs).

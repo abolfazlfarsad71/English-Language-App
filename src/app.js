@@ -1,6 +1,6 @@
 'use strict';
 /* English for Persian speakers — A1 → C2. One-file web app (built by build.mjs). */
-const BUILD = '17 nov · b15';
+const BUILD = '17 nov · b16';
 const DAY = 864e5;
 
 /* ------------------------------ data ------------------------------ */
@@ -15,6 +15,11 @@ UNITS.forEach(u => u.w.forEach((a, i) => {
   WORDS.push(w); WMAP[w.id] = w;
 }));
 const UMAP = Object.fromEntries(UNITS.map(u => [u.id, u]));
+// every lesson has its own conversation: lessons before the last one of a unit have a lesson talk, the last lesson uses the unit dialogue
+const TUNIT = {};
+for (const [id, d] of Object.entries(DATA.talks || {})) { const u = UMAP[id.split('.')[0]]; if (u) TUNIT[id] = { id, lv: u.lv, i: u.i, t: u.t, d, unit: u.id }; }
+const dlgUnit = id => UMAP[id] || TUNIT[id];
+const ALL_TALKS = UNITS.flatMap(u => [...Object.values(TUNIT).filter(t => t.unit === u.id), u]);
 const GMAP = Object.fromEntries(GRAMMAR.map(g => [g.id, g]));
 // the road: every unit = 2 lessons of 8 words
 const LESSONS = [];
@@ -146,7 +151,10 @@ function fetchRange(url, b0, b1) {
     throw new Error('HTTP ' + r.status + ' for ' + url.split('/').pop());
   });
 }
-const CLIP_PRE = 110, CLIP_POST = 90;   // ms taken before/after a clip (clips sit in 300 ms of silence)
+const CLIP_PRE = 70, CLIP_POST = 70;   // ms taken before/after a clip (clips sit in 80 ms of silence; 80 ms of soft ending is already inside the clip)
+// half a second of silent MP3 frames (same format, no bit reservoir) appended to every clip: iPhone Safari can drop the
+// last tenth of a second of a short blob, which cut final sounds ("meet" heard as "mee"); the padding keeps the word whole.
+const CLIP_TAIL = Uint8Array.from(atob('//MwxAAAAANIAAAAAExBTUUzLjEwMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//MyxAAAAANIAAAAAExBTUUzLjEwMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zMMQAAAADSAAAAABMQU1FMy4xMDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zMsQAAAADSAAAAABMQU1FMy4xMDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/8zDEAAAAA0gAAAAATEFNRTMuMTAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/8zDEAAAAA0gAAAAATEFNRTMuMTAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/8zLEAAAAA0gAAAAATEFNRTMuMTAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//MwxAAAAANIAAAAAExBTUUzLjEwMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//MwxAAAAANIAAAAAExBTUUzLjEwMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//MyxAAAAANIAAAAAExBTUUzLjEwMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zMMQAAAADSAAAAABMQU1FMy4xMDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zMsQAAAADSAAAAABMQU1FMy4xMDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/8zDEAAAAA0gAAAAATEFNRTMuMTAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/8zDEAAAAA0gAAAAATEFNRTMuMTAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/8zLEAAAAA0gAAAAATEFNRTMuMTAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//MwxAAAAANIAAAAAExBTUUzLjEwMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//MwxAAAAANIAAAAAExBTUUzLjEwMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//MyxAAAAANIAAAAAExBTUUzLjEwMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zMMQAAAADSAAAAABMQU1FMy4xMDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zMMQAAAADSAAAAABMQU1FMy4xMDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zMsQAAAADSAAAAABMQU1FMy4xMDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/8zDEAAAAA0gAAAAATEFNRTMuMTAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='), c => c.charCodeAt(0));
 const CLIP_MEM = new Map(), CLIP_WAIT = new Map();
 function clipBytes(c) {
   const key = c[0] + ':' + c[1];
@@ -155,7 +163,9 @@ function clipBytes(c) {
   const b0 = Math.max(0, Math.floor((c[1] - CLIP_PRE) / 1000 * c[3])), b1 = Math.ceil((c[2] + CLIP_POST) / 1000 * c[3]) + 8;
   const p = fetchRange(AUDIO_BASE + c[0] + '.mp3', b0, b1).then(u => {
     const s = mp3Sync(u, 0); if (s < 0) throw new Error('no MP3 frame in the range');
-    const v = u.slice(s); CLIP_MEM.set(key, v); if (CLIP_MEM.size > 400) CLIP_MEM.delete(CLIP_MEM.keys().next().value);
+    let e = s; for (;;) { const n = mp3FrameLen(u, e); if (!n || e + n > u.length) break; e += n; }   // whole frames only
+    const v = new Uint8Array(e - s + CLIP_TAIL.length); v.set(u.subarray(s, e)); v.set(CLIP_TAIL, e - s);
+    CLIP_MEM.set(key, v); if (CLIP_MEM.size > 400) CLIP_MEM.delete(CLIP_MEM.keys().next().value);
     return v;
   }).finally(() => CLIP_WAIT.delete(key));
   CLIP_WAIT.set(key, p); p.catch(() => { }); return p;
@@ -173,7 +183,7 @@ let clipBusy = false;
 function stopClip() { clearTimeout(clipTimer); clipSeq++; clipBusy = false; const a = AEL; if (a) { a.onended = a.onerror = null; try { a.pause(); } catch (e) { } } }
 function playClip(c, opt, text) {
   stopClip(); const a = audioEl(), seq = clipSeq; clipBusy = true;
-  const rate = Math.min(1.5, Math.max(.5, (opt.rate || (ST && ST.rate) || 1)));
+  const rate = Math.min(1.2, Math.max(.42, (opt.rate || curRate()) * (opt.slow ? .7 : 1)));
   const finish = () => { if (seq !== clipSeq) return; clipSeq++; clipBusy = false; clearTimeout(clipTimer); a.onended = a.onerror = null; AUDIO_LAST = 'played ' + c[0]; if (opt.end) opt.end(); };
   const fail = why => { if (seq !== clipSeq) return; clipSeq++; clipBusy = false; clearTimeout(clipTimer); a.onended = a.onerror = null; try { a.pause(); } catch (e) { } AUDIO_ERR = why; logErr('audio ' + why); phoneSay(text, opt); };
   clipBytes(c).then(u => {
@@ -226,7 +236,7 @@ function phoneSay(text, opt) {
     const u = new SpeechSynthesisUtterance(text);
     const v = VOICES.slice().sort((a, b) => voiceScore(b, male) - voiceScore(a, male))[0];
     if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'en-US';
-    u.rate = Math.max(.5, Math.min(1.2, (opt.rate || (ST && ST.rate) || 1) * .95));
+    u.rate = Math.max(.4, Math.min(1.2, (opt.rate || curRate()) * (opt.slow ? .7 : 1) * .95));
     u.onend = () => { if (opt.end) opt.end(); };
     u.onerror = e => { const c = (e && e.error) || 'error'; if (c === 'interrupted' || c === 'canceled') return; SPEECH_ERR = c; logErr('speech ' + c); if (opt.end) opt.end(); };
     speechSynthesis.speak(u);
@@ -234,7 +244,7 @@ function phoneSay(text, opt) {
 }
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-say]');
-  if (b) { e.stopPropagation(); unlockAudio(); say(b.dataset.say, { rate: b.dataset.slow ? .7 : undefined, v: b.dataset.v || undefined }); }
+  if (b) { e.stopPropagation(); unlockAudio(); say(b.dataset.say, { slow: !!b.dataset.slow, v: b.dataset.v || undefined }); }
 }, true);
 ['touchend', 'click'].forEach(ev => document.addEventListener(ev, unlockAudio, { passive: true, capture: true }));
 const sayBtn = (t, cls) => `<button class="say ${cls || ''}" data-say="${esc(t)}" aria-label="listen">🔊</button>`;
@@ -257,7 +267,7 @@ function known(id) { const c = ST.cards[id]; return c && c.b >= 3; }
 function grade(id, ok) {
   let c = ST.cards[id] || (ST.cards[id] = { b: 0, d: 0, n: 0, c: 0, w: 0 });
   c.n++; c.lt = Date.now();
-  if (ok) { c.c++; c.b = Math.min(6, c.b + 1); } else { c.w++; c.b = Math.max(1, c.b - 2); missNote('w:' + id, false); }
+  if (ok) { c.c++; c.b = Math.min(6, c.b + 1); } else { c.w++; c.b = 1; missNote('w:' + id, false); }
   c.d = Date.now() + BOX_DAYS[c.b] * DAY - 3 * 3600e3;
   ST.xp += ok ? 2 : 0; save();
 }
@@ -276,13 +286,14 @@ function freshWords(n) { const out = []; if (n <= 0) return out; for (const L of
 function daysLeft() { let a = 0, b = 0; for (const w of WORDS) if (!ST.cards[w.id]) { if (LEVELS.indexOf(w.lv) <= 2) a++; else b++; } const p = myPace(); return p ? Math.ceil((a + b) / p) : Math.ceil(a / 30 + b / 20); }
 const fmt = n => n.toLocaleString('en-US');
 function lessonIdx(L) { return LESSONS.indexOf(L); }
+function lessonTalk(L) { return TUNIT[L.id] || (L.k === Math.ceil(UMAP[L.u].w.length / 8) - 1 ? UMAP[L.u] : null); }
 function lessonTitle(L) { const u = UMAP[L.u]; return u.t + ' · part ' + (L.k + 1); }
 // mistakes come back in later sessions until answered right in a later session
 let SESSION_ID = 0;
 function missNote(key, ok) {
   const m = ST.miss[key];
   if (!ok) { ST.miss[key] = { n: 0, s: SESSION_ID, t: Date.now() }; return; }
-  if (m && m.s !== SESSION_ID) { m.n++; m.s = SESSION_ID; if (m.n >= 1) delete ST.miss[key]; }
+  if (m && m.s !== SESSION_ID) { m.n++; m.s = SESSION_ID; if (m.n >= 2) delete ST.miss[key]; }
 }
 const missCount = () => Object.keys(ST.miss).length;
 // grammar: rule k opens after lesson round(k * ratio); spread over the road in level order
@@ -515,12 +526,16 @@ function playDialogue(u, scope) {
     if (run !== DLG_RUN || i >= d.l.length) { scope && scope.querySelectorAll('.bub').forEach(b => b.classList.remove('now')); return; }
     const l = d.l[i], b = scope && scope.querySelector(`[data-li="${i}"]`);
     scope && scope.querySelectorAll('.bub').forEach(x => x.classList.remove('now')); if (b) { b.classList.add('now'); }
-    say(l[1], { quiet: true, v: vs[l[0]], end: () => { if (run === DLG_RUN) { i++; setTimeout(step, 350); } } });
+    say(l[1], { quiet: true, v: vs[l[0]], end: () => { if (run === DLG_RUN) { i++; setTimeout(step, 120); } } });
   };
   step();
 }
-function speedSeg() { const r = ST.rate || 1; return `<div class="seg" style="justify-content:center">${[[1, 'normal'], [.85, 'slower'], [.7, 'slow'], [.55, 'very slow']].map(x => `<button data-rate="${x[0]}" class="${r === x[0] ? 'on' : ''}">${x[1]}</button>`).join('')}</div>`; }
-function bindSpeed(scope) { scope.querySelectorAll('[data-rate]').forEach(b => b.onclick = () => { ST.rate = +b.dataset.rate; save(); scope.querySelectorAll('[data-rate]').forEach(x => x.classList.toggle('on', x === b)); toast('Speed: ' + b.textContent); }); }
+// speaking speed 0.6× – 1.2× (as in the Dutch app); the recordings keep their pitch when slowed down or sped up
+const RATES = [0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2];
+const curRate = () => { const r = +(ST && ST.rate) || 1; return Math.min(1.2, Math.max(0.6, r)); };
+function speedSeg() { const r = curRate(); return `<div class="rates">${RATES.map(x => `<button data-rate="${x}" class="${Math.abs(r - x) < .01 ? 'on' : ''}">${x.toFixed(1)}×</button>`).join('')}</div>`; }
+function speedCard() { return `<div class="card"><div class="between"><div>${lab('speaking speed', 'سرعت گفتار')}<div class="xs" style="margin-top:4px">slower is easier to copy</div><div class="xs fa">آهسته‌تر برای تکرار کردن آسان‌تر است</div></div><span class="chip blue ratechip">${curRate().toFixed(1)}×</span></div><div style="margin-top:10px">${speedSeg()}</div></div>`; }
+function bindSpeed(scope) { scope.querySelectorAll('[data-rate]').forEach(b => b.onclick = () => { ST.rate = +b.dataset.rate; save(); scope.querySelectorAll('[data-rate]').forEach(x => x.classList.toggle('on', x === b)); scope.querySelectorAll('.ratechip').forEach(x => x.textContent = b.textContent); if (!sess && TAB === 'you') say('Hello, nice to meet you.'); else toast('Speed ' + b.textContent); }); }
 function dlgQuestion(u, k) {
   const q = u.d.q[k];
   return {
@@ -541,8 +556,9 @@ function startSession(items, title, onEnd) {
   SESSION_ID = Date.now();
   sess = { items, i: 0, ok: 0, n: 0, title, onEnd, retries: 0 };
   const r = RUN(); r.style.display = 'flex'; document.body.style.overflow = 'hidden';
-  r.innerHTML = `<div class="runtop"><button class="icob" id="rx">✕</button><div class="runbar"><div class="bar"><i id="rbar" style="width:0"></i></div></div><span class="xs" id="rcount"></span></div><div class="runbody" id="rbody"></div>`;
+  r.innerHTML = `<div class="runtop"><button class="icob" id="rx">✕</button><button class="icob" id="rprev" aria-label="previous card">‹</button><div class="runbar"><div class="bar"><i id="rbar" style="width:0"></i></div></div><span class="xs" id="rcount"></span></div><div class="runbody" id="rbody"></div>`;
   $('#rx').onclick = () => { if (confirm('Stop this session? Your progress so far is saved.')) endSession(true); };
+  $('#rprev').onclick = () => { if (!sess || sess.i <= 0) return; stopSpeech(); DLG_RUN++; sess.i--; sess.items[sess.i].seen = true; step(); };   // back to the previous card, to read it again (not graded again)
   step();
 }
 function step() {
@@ -552,16 +568,18 @@ function step() {
   body.innerHTML = ''; body.dataset.done = ''; body.scrollTop = 0;
   $('#rbar').style.width = (100 * sess.i / sess.items.length) + '%';
   $('#rcount').textContent = (sess.i + 1) + '/' + sess.items.length;
+  $('#rprev').style.visibility = sess.i > 0 ? 'visible' : 'hidden';
   pickMix();
   try { it.render(body, (ok, cor) => answered(it, ok, cor)); prefetchIn(body); }
   catch (e) { logErr('render ' + it.key + ' ' + e.message); sess.i++; step(); }
 }
 function answered(it, ok, cor) {
   if (it.noGrade) { sess.i++; return step(); }
-  sess.n++; if (ok) sess.ok++;
-  if (!it.retry) { if (it.grade) it.grade(ok); if (ok) missNote(it.key, true); }
-  if (!ok && !it.retry && it.remake && sess.retries < 10) {   // a wrong answer comes back three cards later
-    const r = it.remake(); r.retry = true; sess.retries++;
+  const again = it.seen;   // a card opened again with ‹ is practice only
+  if (!again) { sess.n++; if (ok) sess.ok++; }
+  if (!it.retry && !again) { if (it.grade) it.grade(ok); if (ok) missNote(it.key, true); }
+  if (!ok && !again && it.remake && (it.retry || 0) < 3 && sess.retries < 25) {   // a wrong answer comes back three cards later, until it is right (max 3 times)
+    const r = it.remake(); r.retry = (it.retry || 0) + 1; sess.retries++;
     sess.items.splice(Math.min(sess.items.length, sess.i + 4), 0, r);
   }
   const body = $('#rbody');
@@ -570,7 +588,6 @@ function answered(it, ok, cor) {
   const nb = el('button', 'btn', 'Continue →'); nb.style.marginTop = '12px';
   nb.onclick = () => { stopSpeech(); sess.i++; step(); };
   body.appendChild(nb); nb.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  if (ok) setTimeout(() => { if (nb.isConnected && sess && sess.items[sess.i] === it) nb.click(); }, it.kind === 'word' && it.render.name === 'type' ? 1400 : 1100);
 }
 function finish() {
   const s = sess; markDay(s.n || 1); saveNow();
@@ -604,7 +621,7 @@ function missItems(limit) {
     const p = k.split(':');
     if (p[0] === 'w' && WMAP[p[1]]) out.push(wordEx(WMAP[p[1]]));
     else if (p[0] === 'g' && GMAP[p[1]] && GMAP[p[1]].d[+p[2]]) out.push(grammarDrill(GMAP[p[1]], +p[2]));
-    else if (p[0] === 'l' && UMAP[p[1]]) out.push(dlgQuestion(UMAP[p[1]], +p[2]));
+    else if (p[0] === 'l' && dlgUnit(p[1])) out.push(dlgQuestion(dlgUnit(p[1]), +p[2]));
     else if (p[0] === 'p') { const P = LISTEN.find(x => x.id === p[1]); if (P) out.push(passageQ(P, +p[2])); }
     else delete ST.miss[k];
   });
@@ -613,7 +630,7 @@ function missItems(limit) {
 function buildDaily() {
   const items = [], usedW = new Set();
   // 1. warm-up: mistakes from earlier sessions
-  missItems(8).forEach(x => { items.push(x); if (x.w) usedW.add(x.w.id); });
+  missItems(12).forEach(x => { items.push(x); if (x.w) usedW.add(x.w.id); });
   // 2. due reviews
   const due = dueList().filter(w => !usedW.has(w.id)).slice(0, 12);
   due.slice(0, 6).forEach(w => { items.push(wordEx(w)); usedW.add(w.id); });
@@ -631,10 +648,10 @@ function buildDaily() {
   // 5. remaining reviews, mixed with production practice of today's words
   due.slice(6).forEach(w => items.push(wordEx(w)));
   fresh.forEach(w => { if (blankIn(w.ex, w.w)) items.push(wordEx(w, 'cloze')); });
-  // 6. listening: when today's new words finish a unit, hear its dialogue and answer
+  // 6. listening: every lesson finished today has its own conversation, heard first without the text, then 2 questions
   const fid = new Set(fresh.map(w => w.id));
-  [...new Set(fresh.map(w => w.u))].filter(id => !ST.dlg[id] && UMAP[id].w.every((_, i) => ST.cards[id + '-' + i] || fid.has(id + '-' + i))).slice(0, 2)
-    .forEach(id => { const u = UMAP[id]; items.push(dialogueCard(u, true)); u.d.q.forEach((_, k) => items.push(dlgQuestion(u, k))); });
+  LESSONS.filter(L => L.words.some(id => fid.has(id)) && L.words.every(id => ST.cards[id] || fid.has(id))).map(lessonTalk).filter(t => t && !ST.dlg[t.id]).slice(0, 3)
+    .forEach(t => { items.push(dialogueCard(t, true)); t.d.q.forEach((_, k) => items.push(dlgQuestion(t, k))); });
   return items;
 }
 function quickReview() {
@@ -658,7 +675,7 @@ function passageCard(P) {
       <div id="ptext" class="card hide">${P.s.map((x, i) => `<div class="rule" data-pi="${i}" data-say="${esc(x[0])}"><div style="font-weight:600">${esc(x[0])}</div><div class="fa" style="color:var(--dim);font-size:14px;margin-top:3px">${esc(x[1])}</div></div>`).join('')}</div>
       <button class="btn line sm" id="pshow" style="margin-top:8px">Show the text</button>
       <button class="btn" id="pnext" style="margin-top:12px">Answer the questions →</button>`;
-      const play = () => { const run = ++DLG_RUN, pv = ST.rnd ? randVoice() : mainVoice(); loadVoice(pv); let i = 0; const nx = () => { if (run !== DLG_RUN || i >= P.s.length) return; say(P.s[i][0], { quiet: true, v: pv, end: () => { if (run === DLG_RUN) { i++; setTimeout(nx, 300); } } }); }; nx(); };
+      const play = () => { const run = ++DLG_RUN, pv = ST.rnd ? randVoice() : mainVoice(); loadVoice(pv); let i = 0; const nx = () => { if (run !== DLG_RUN || i >= P.s.length) return; say(P.s[i][0], { quiet: true, v: pv, end: () => { if (run === DLG_RUN) { i++; setTimeout(nx, 100); } } }); }; nx(); };
       body.querySelector('#pplay').onclick = play;
       body.querySelector('#pshow').onclick = () => body.querySelector('#ptext').classList.toggle('hide');
       body.querySelector('#pnext').onclick = () => { stopSpeech(); DLG_RUN++; done(true); };
@@ -712,7 +729,7 @@ function vToday() {
   ${mc ? `<button class="card tap" id="miss"><div class="between"><div>${lab('your mistakes', 'اشتباهات شما', 'color:var(--coral)')}<div class="h3" style="margin-top:4px">${mc} question${mc > 1 ? 's' : ''} to master</div><div class="xs">They also open your next daily lessons until you get them right again.</div></div><span style="font-size:28px">🎯</span></div></button>` : ''}
   <div class="card"><div class="row">${ring(cl.pct, cl.lv)}<div class="grow"><div class="eyebrow">your level</div><div class="h3">${Math.round(cl.pct * 100)}% through ${cl.lv}</div><div class="bar" style="margin-top:8px"><i style="width:${Math.round(100 * lessonsDone() / LESSONS.length)}%"></i></div><div class="xs" style="margin-top:4px">Lesson ${Math.min(LESSONS.length, lessonsDone() + 1)} of ${LESSONS.length} on the road to C2</div></div></div></div>
   <div class="row"><button class="card tap grow" id="qr" style="margin:0"><div style="font-size:24px">⚡</div><div class="h3">Quick review</div><div class="xs">${seenWords().length} words met</div></button>
-  <button class="card tap grow" id="gl" style="margin:0"><div style="font-size:24px">🎧</div><div class="h3">Listening</div><div class="xs">${UNITS.filter(u => ST.dlg[u.id]).length} dialogues done</div></button></div>
+  <button class="card tap grow" id="gl" style="margin:0"><div style="font-size:24px">🎧</div><div class="h3">Listening</div><div class="xs">${ALL_TALKS.filter(t => ST.dlg[t.id]).length} / ${ALL_TALKS.length} conversations</div></button></div>
   <div class="card"><div class="eyebrow">this week</div>${weekBars()}</div>`;
 }
 function weekBars() {
@@ -746,11 +763,12 @@ function vGrammar() {
   ${LEVELS.map(lv => `<div class="sec"><span class="eyebrow">${lv}</span></div><div class="card" style="padding:4px 14px">` + GRAMMAR.filter(g => g.lv === lv).map(g => `<button class="list-item" data-gram="${g.id}" style="width:100%;text-align:left"><span class="lvchip lv-${g.lv}">${GRAMMAR.indexOf(g) + 1}</span><div class="grow"><div style="font-weight:650">${esc(g.t)}</div><div class="fa" style="font-size:13px;color:var(--dim)">${esc(g.fa)}</div></div><span>${gramLearned(g.id) ? '<span class="done-mark">✓</span>' : un.has(g.id) ? '🔓' : '🔒'}</span></button>`).join('') + '</div>').join('')}`;
 }
 function vListen() {
-  if (SUB && SUB.startsWith('u') && UMAP[SUB]) {
-    const u = UMAP[SUB];
+  if (SUB && SUB.startsWith('u') && dlgUnit(SUB)) {
+    const u = dlgUnit(SUB), sib = ALL_TALKS.filter(t => (t.unit || t.id) === (u.unit || u.id));
     return `<button class="btn ghost sm inl" data-back>‹ Listening</button><div class="h2" style="margin-top:12px">${u.i} ${esc(u.d.t)}</div><div class="fa" style="color:var(--dim)">${esc(u.d.fa)}</div>
     <div class="row" style="justify-content:center;margin:14px 0"><button class="say big" data-dplay="${u.id}">▶</button></div>${speedSeg()}
-    <div id="dscope">${dlgLines(u)}</div><button class="btn" data-dtest="${u.id}" style="margin-top:14px">Test yourself (${u.d.q.length} questions)</button>`;
+    <div id="dscope">${dlgLines(u)}</div><button class="btn" data-dtest="${u.id}" style="margin-top:14px">Test yourself (${u.d.q.length} questions)</button>
+    ${sib.length > 1 ? `<div class="sec">${lab('conversations in this unit', 'مکالمه‌های این واحد')}</div>` + sib.map(t => `<button class="card tap" data-dlg="${t.id}" style="margin:6px 0"><div class="between"><div class="h3">${t.id === u.id ? '▶ ' : ''}${esc(t.d.t)}</div><span class="xs">${ST.dlg[t.id] ? '<span class="done-mark">✓</span>' : ''}</span></div><div class="fa" style="font-size:13px;color:var(--dim)">${esc(t.d.fa)}</div></button>`).join('') : ''}`;
   }
   if (SUB === 'sounds') {
     return `<button class="btn ghost sm inl" data-back>‹ Listening</button><div class="h2" style="margin-top:12px">Sounds for Persian speakers</div><div class="fa" style="color:var(--dim)">تلفظ‌هایی که برای فارسی‌زبان‌ها سخت است</div>
@@ -760,8 +778,8 @@ function vListen() {
   <button class="card tap glow" data-sub="sounds"><div class="row"><span style="font-size:30px">👄</span><div class="grow"><div class="h3">Sounds for Persian speakers</div><div class="xs">th, v/w, "eschool", ship/sheep, stress…</div></div><span>›</span></div></button>
   <div class="sec"><span class="eyebrow">stories & announcements · ${LISTEN.length}</span></div>
   ${LISTEN.map(P => `<button class="card tap" data-pass="${P.id}" style="margin:6px 0"><div class="row">${lvChip(P.lv)}<div class="grow"><div class="h3">${esc(P.t)}</div><div class="fa" style="font-size:13px;color:var(--dim)">${esc(P.fa)}</div></div><span class="xs">${ST.lis[P.id] ? '✓ ' + ST.lis[P.id].ok + '/' + ST.lis[P.id].n : '▶'}</span></div></button>`).join('')}
-  <div class="sec"><span class="eyebrow">dialogues · ${UNITS.length}</span></div>
-  ${UNITS.map(u => `<button class="card tap" data-dlg="${u.id}" style="margin:6px 0"><div class="row">${lvChip(u.lv)}<div class="grow"><div class="h3">${u.i} ${esc(u.d.t)}</div><div class="xs">${esc(u.t)}</div></div><span class="xs">${ST.dlg[u.id] ? '<span class="done-mark">✓</span>' : '▶'}</span></div></button>`).join('')}`;
+  <div class="sec"><span class="eyebrow">conversations · ${ALL_TALKS.length}</span></div>
+  ${UNITS.map(u => { const ts = ALL_TALKS.filter(t => (t.unit || t.id) === u.id), n = ts.filter(t => ST.dlg[t.id]).length; return `<button class="card tap" data-dlg="${(ts.find(t => !ST.dlg[t.id]) || u).id}" style="margin:6px 0"><div class="row">${lvChip(u.lv)}<div class="grow"><div class="h3">${u.i} ${esc(u.t.replace(/ · part \d+$/, ''))}</div><div class="xs">${ts.map(t => esc(t.d.t)).join(' · ')}</div></div><span class="xs">${n === ts.length ? '<span class="done-mark">✓</span>' : n + '/' + ts.length}</span></div></button>`; }).join('')}`;
 }
 function paceCard() {
   const p = myPace(), tg = dayTarget(), nt = newToday();
@@ -811,7 +829,7 @@ function stopSheet(id) {
   const u = UMAP[id], L = nextLesson(), uls = LESSONS.filter(l => l.u === id);
   const sh = el('div', 'sheet', `<div class="sheetbox"><div class="row"><span style="font-size:44px">${u.i}</span><div class="grow"><div class="h2">${esc(u.t)}</div><div class="fa" style="color:var(--dim)">${esc(u.fa)}</div></div>${lvChip(u.lv)}</div>
     <div class="card" style="padding:6px 14px">${uls.map(l => { const d = lessonDone(l), n = l.words.filter(x => ST.cards[x]).length; return `<div class="list-item"><span class="lsnn ${d ? 'd' : l === L ? 'n' : ''}">${lessonIdx(l) + 1}</span><div class="grow"><b>Lesson ${lessonIdx(l) + 1}</b><div class="xs">${l.words.map(x => esc(WMAP[x].w)).join(', ')}</div></div><span class="xs">${d ? '<span class="done-mark">✓</span>' : n + '/' + l.words.length}</span></div>`; }).join('')}</div>
-    <div class="sm">💬 Dialogue: ${esc(u.d.t)}${ST.dlg[id] ? ' ✓' : ''}</div><div class="fa sm">${esc(u.d.fa)}</div>
+    ${uls.map(l => { const t = lessonTalk(l); return t ? `<div class="sm">💬 Lesson ${lessonIdx(l) + 1}: ${esc(t.d.t)}${ST.dlg[t.id] ? ' ✓' : ''}</div><div class="fa sm">${esc(t.d.fa)}</div>` : ''; }).join('')}
     ${L && L.u === id ? '<button class="btn" id="shgo" style="margin-top:14px">▶ Start this lesson</button>' : ''}
     <div class="row" style="margin-top:10px"><button class="btn ghost sm" id="shw">📚 Words</button><button class="btn ghost sm" id="shd">🎧 Dialogue</button></div>
     <button class="btn line sm" id="shx" style="margin-top:10px">Close</button></div>`);
@@ -826,13 +844,12 @@ function stopSheet(id) {
 function vYou() {
   return `${lab('profile', 'نمایه')}<div class="row" style="margin-top:6px"><span class="av" style="width:56px;height:56px;font-size:24px">${esc(ME.name[0].toUpperCase())}</span><div class="grow"><div class="h2">${esc(ME.name)} ${ME.owner ? '<span class="chip gold">OWNER</span>' : ''}</div><div class="xs">${seenWords().length} words · ${GRAMMAR.filter(g => gramLearned(g.id)).length} grammar lessons · best streak ${ST.streak.best || 0} days</div></div></div>
   <div class="sec">${lab('daily pace', 'برنامهٔ روزانه')}</div>${paceCard()}
-  <div class="sec">${lab('voices', 'صداها')}</div><div class="card">
+  <div class="sec">${lab('voices', 'صداها')}</div>${speedCard()}<div class="card">
     <div class="sm">12 recorded American voices. Choose your default woman and default man; tap a name to hear it.</div><div class="fa sm" style="margin-top:2px">۱۲ صدای آمریکایی ضبط‌شده. صدای پیش‌فرض زن و مرد را انتخاب کنید؛ با زدن هر نام صدایش را می‌شنوید.</div>
     <div class="xs" style="margin-top:12px">Default woman</div><div class="xs fa">صدای زن پیش‌فرض</div><div class="vgrid">${VOICE_LIST.filter(x => x[2] === 'f').map(x => `<button data-vf="${x[0]}" class="${womanVoice() === x[0] ? 'on' : ''}"><b>👩 ${x[1]}</b><span>${x[3]}</span></button>`).join('')}</div>
     <div class="xs" style="margin-top:12px">Default man</div><div class="xs fa">صدای مرد پیش‌فرض</div><div class="vgrid">${VOICE_LIST.filter(x => x[2] === 'm').map(x => `<button data-vm="${x[0]}" class="${manVoice() === x[0] ? 'on' : ''}"><b>👨 ${x[1]}</b><span>${x[3]}</span></button>`).join('')}</div>
     <div class="xs" style="margin-top:14px">Words and example sentences</div><div class="xs fa">واژه‌ها و جمله‌های نمونه</div><div class="seg">${[['f', '👩 Woman'], ['m', '👨 Man'], ['mix', '👩👨 Both']].map(x => `<button data-wv="${x[0]}" class="${(ST.wv || 'mix') === x[0] ? 'on' : ''}">${x[1]}</button>`).join('')}</div>
     <label class="tgl"><input type="checkbox" id="rnd" ${ST.rnd ? 'checked' : ''}><span><b>Different voices in conversations and listening</b><span class="xs" style="display:block">Each dialogue and story gets random voices of the right gender. Off: your two default voices.</span><span class="xs fa">هر مکالمه و داستان با صداهای تصادفی پخش می‌شود. خاموش: همان دو صدای پیش‌فرض.</span></span></label>
-    <div class="sm" style="margin-top:12px">Speed</div>${speedSeg()}
     <button class="btn ghost sm" id="vtest" style="margin-top:10px">🔊 Test: "Hello, nice to meet you."</button>
     <div class="xs" style="margin-top:8px">Recordings: ${AKEYS ? fmt(AKEYS.size) + ' phrases ready' : esc(AKEY_STATE || 'not loaded')}${AUDIO_ERR ? ' · last problem: ' + esc(AUDIO_ERR) : ''}. If you hear nothing, turn off silent mode and turn the volume up.</div>
     <div class="fa" style="font-size:13px;color:var(--dim);margin-top:6px">اگر صدایی نمی‌شنوید، حالت بی‌صدا را خاموش و صدا را زیاد کنید.</div></div>
@@ -875,8 +892,8 @@ function bind(a) {
   on('[data-gpr]', b => { const g = GMAP[b.dataset.gpr]; if (!ST.gram[g.id]) ST.gram[g.id] = { n: 0, ok: 0, t: Date.now() }; startSession(shuffle([...g.d.keys()]).map(k => grammarDrill(g, k)), g.t); });
   on('[data-dlg]', b => { SUB = b.dataset.dlg; render(); window.scrollTo(0, 0); });
   on('[data-sub]', b => { SUB = b.dataset.sub; render(); window.scrollTo(0, 0); });
-  on('[data-dplay]', b => playDialogue(UMAP[b.dataset.dplay], $('#dscope')));
-  on('[data-dtest]', b => { const u = UMAP[b.dataset.dtest]; stopSpeech(); DLG_RUN++; startSession(u.d.q.map((_, k) => dlgQuestion(u, k)), u.d.t); });
+  on('[data-dplay]', b => playDialogue(dlgUnit(b.dataset.dplay), $('#dscope')));
+  on('[data-dtest]', b => { const u = dlgUnit(b.dataset.dtest); stopSpeech(); DLG_RUN++; startSession(u.d.q.map((_, k) => dlgQuestion(u, k)), u.d.t); });
   on('[data-pass]', b => { const P = LISTEN.find(x => x.id === b.dataset.pass); startSession([passageCard(P), ...P.q.map((_, k) => passageQ(P, k))], P.t); });
   const keepY = f => { const y = window.scrollY; f(); render(); window.scrollTo(0, y); };
   on('[data-vf]', b => keepY(() => { ST.vf = b.dataset.vf; save(); say('Hello, nice to meet you.', { v: ST.vf }); }));
