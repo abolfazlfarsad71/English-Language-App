@@ -1,6 +1,6 @@
 'use strict';
 /* English for Persian speakers — A1 → C2. One-file web app (built by build.mjs). */
-const BUILD = '17 nov · b17';
+const BUILD = '22 nov · b18';
 const DAY = 864e5;
 
 /* ------------------------------ data ------------------------------ */
@@ -58,6 +58,12 @@ const pick = (a, n) => shuffle(a).slice(0, n);
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const faNum = n => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);
 function toast(m, ms) { const old = $('.toast'); if (old) old.remove(); const t = el('div', 'toast', esc(m)); document.body.appendChild(t); setTimeout(() => t.remove(), ms || 2200); }
+function toastUndo(m, undo) {
+  const old = $('.toast'); if (old) old.remove();
+  const t = el('div', 'toast', esc(m) + ' <button class="chip gold" style="margin-left:6px">Undo</button>'); document.body.appendChild(t);
+  t.querySelector('button').onclick = () => { undo(); t.remove(); toast('Undone: it will be reviewed again'); if (!sess) render(); };
+  setTimeout(() => t.remove(), 6000);
+}
 function haptic(ok) { try { if (navigator.vibrate) navigator.vibrate(ok ? 12 : [20, 40, 20]); } catch (e) { } }
 const ERRLOG = S.get('en.errlog', []);
 function logErr(m) { ERRLOG.push({ t: new Date().toISOString(), m: String(m).slice(0, 300), b: BUILD }); while (ERRLOG.length > 20) ERRLOG.shift(); S.set('en.errlog', ERRLOG); }
@@ -69,6 +75,8 @@ const PIC = {
   pylon: '<svg viewBox="0 0 64 64" fill="none" stroke="#DCE6F7" stroke-width="2" stroke-linejoin="round"><path d="M32 4L20 60M32 4l12 56M24 42h16M26 30h12M28 18h8M24 42l14 18M40 42L26 60M26 30l13 12M38 30L25 42"/><path d="M12 18h40M8 30h48" stroke-width="2.5"/><path d="M0 16c10 4 10 4 12 2M52 18c2 2 2 2 12-2M0 28c6 4 6 4 8 2M56 30c2 2 2 2 8-2" stroke="#FFC24A" stroke-width="1.5"/></svg>',
   bess: '<svg viewBox="0 0 64 64"><rect x="6" y="18" width="52" height="34" rx="3" fill="#DCE6F7"/><rect x="6" y="18" width="52" height="7" fill="#97A7C7"/><g fill="#5B8DEF"><rect x="11" y="29" width="9" height="18" rx="1"/><rect x="23" y="29" width="9" height="18" rx="1"/><rect x="35" y="29" width="9" height="18" rx="1"/></g><path d="M52 30l-4 8h4l-3 8 7-10h-4l3-6z" fill="#FFC24A"/><path d="M4 56h56" stroke="#34D399" stroke-width="3" stroke-linecap="round"/><path d="M18 18V11h28v7" stroke="#97A7C7" stroke-width="2" fill="none"/></svg>'
 };
+// the word inside its example sentence, highlighted (seeing it in context helps memory)
+function hlEx(w) { const b = blankIn(w.ex, w.w); if (!b) return esc(w.ex); const i = w.ex.toLowerCase().indexOf(b.form.toLowerCase()); return i < 0 ? esc(w.ex) : esc(w.ex.slice(0, i)) + '<mark class="hl">' + esc(w.ex.slice(i, i + b.form.length)) + '</mark>' + esc(w.ex.slice(i + b.form.length)); }
 function pic(w, big) {
   if (w.e && w.e[0] === '@' && PIC[w.e.slice(1)]) return big ? `<div class="stage"><div class="pic3d"><span class="svgpic">${PIC[w.e.slice(1)]}</span></div></div>` : `<span class="mini"><span class="svgpic sm">${PIC[w.e.slice(1)]}</span></span>`;
   if (w.e) return big ? `<div class="stage"><div class="pic3d"><span>${w.e}</span></div></div>` : `<span class="mini">${w.e}</span>`;
@@ -271,7 +279,11 @@ const CODE_RE = /^[A-Z]\d{4}$/;
 /* ------------------------------ progress model ------------------------------ */
 const BOX_DAYS = [0, 1, 2, 4, 8, 16, 35];      // spaced repetition intervals per box
 function card(id) { return ST.cards[id]; }
-function known(id) { const c = ST.cards[id]; return c && c.b >= 3; }
+function known(id) { const c = ST.cards[id]; return c && (c.k || c.b >= 3); }
+const knownForever = id => !!(ST.cards[id] && ST.cards[id].k);
+// the learner says "I know this word": it counts as learned and never comes back in any review
+function markKnown(id) { const c = ST.cards[id] || (ST.cards[id] = { b: 6, d: 0, n: 0, c: 0, w: 0 }); c.k = 1; c.b = 6; delete ST.miss['w:' + id]; save(); }
+function unmarkKnown(id) { const c = ST.cards[id]; if (c) { delete c.k; c.b = 3; c.d = Date.now() + DAY; } save(); }
 function grade(id, ok) {
   let c = ST.cards[id] || (ST.cards[id] = { b: 0, d: 0, n: 0, c: 0, w: 0 });
   c.n++; c.lt = Date.now();
@@ -281,7 +293,7 @@ function grade(id, ok) {
 }
 function introduce(id) { if (!ST.cards[id]) ST.cards[id] = { b: 1, d: Date.now() + DAY - 3 * 3600e3, n: 0, c: 0, w: 0, t: Date.now() }; save(); }
 const seenWords = () => WORDS.filter(w => ST.cards[w.id]);
-const dueList = (at) => WORDS.filter(w => { const c = ST.cards[w.id]; return c && c.d <= (at || Date.now()); }).sort((a, b) => ST.cards[a.id].d - ST.cards[b.id].d);
+const dueList = (at) => WORDS.filter(w => { const c = ST.cards[w.id]; return c && !c.k && c.d <= (at || Date.now()); }).sort((a, b) => ST.cards[a.id].d - ST.cards[b.id].d);
 function lessonDone(L) { return L.words.every(id => ST.cards[id]); }
 function nextLesson() { return LESSONS.find(L => !lessonDone(L)) || null; }
 const lessonsDone = () => LESSONS.filter(lessonDone).length;
@@ -403,7 +415,7 @@ function wordEx(w, kind) {
       mcq(body, [w.fa, ...distractWords(w, 3, 'fa').map(x => x.fa)], w.fa, done, 'fa');
     },
     fa2en(body, done) {
-      body.innerHTML = `<div class="eyebrow" style="text-align:center">choose the English</div><div class="prompt"><div class="fa">${esc(w.fa)}</div><div style="margin-top:6px">${posTag(w.pos)}</div></div>`;
+      body.innerHTML = `<div class="eyebrow" style="text-align:center">choose the English</div><div style="display:flex;justify-content:center;margin-top:14px" class="pos-${w.pos}">${pic(w, false)}</div><div class="prompt"><div class="fa">${esc(w.fa)}</div><div style="margin-top:6px">${posTag(w.pos)}</div></div>`;
       mcq(body, [w.w, ...distractWords(w, 3, 'w').map(x => x.w)], w.w, (ok, cor) => { say(w.w, { quiet: true }); done(ok, cor); });
     },
     listen(body, done) {
@@ -442,18 +454,18 @@ function wordEx(w, kind) {
       mcq(body, [w.w, ...ds.slice(0, 3)], w.w, done);
     }
   };
-  return { kind: 'word', key, w, render: R[kind] || R.en2fa, grade: ok => grade(w.id, ok), feedback: () => `<b>${esc(w.w)}</b><div class="fa">${esc(w.fa)}</div><div style="margin-top:6px">${esc(w.ex)}</div><div class="fa" style="margin-top:2px">${esc(w.exfa)}</div>`, remake: () => wordEx(w) };
+  return { kind: 'word', key, w, render: R[kind] || R.en2fa, grade: ok => grade(w.id, ok), feedback: () => `<div class="row">${pic(w, false)}<div class="grow"><b>${esc(w.w)}</b><div class="fa">${esc(w.fa)}</div></div></div><div style="margin-top:6px">${hlEx(w)}</div><div class="fa" style="margin-top:2px">${esc(w.exfa)}</div>`, remake: () => wordEx(w) };
 }
 function introCard(w, L, i, n) {
   return {
-    kind: 'intro', key: 'i:' + w.id, noGrade: true, render(body, done) {
+    kind: 'intro', key: 'i:' + w.id, w, noGrade: true, render(body, done) {
       body.innerHTML = `<div class="between"><span class="eyebrow">new word ${i + 1} / ${n}</span>${lvChip(w.lv)}</div>
-        ${pic(w, true)}
+        <div class="pos-${w.pos}">${pic(w, true)}</div>
         <div class="c" style="text-align:center;margin-top:10px"><div class="row" style="justify-content:center"><span class="w" style="font-size:34px;font-weight:850">${esc(w.w)}</span>${sayBtn(w.w)}</div>
         ${posTag(w.pos)}
         <div class="fa" style="font-size:24px;margin-top:6px;text-align:center">${esc(w.fa)}</div>
         ${w.syn.length ? `<div style="margin-top:8px"><div class="xs">synonyms</div><div class="xs fa c">مترادف‌ها</div>${w.syn.map(s => `<span class="syn">${esc(s)}</span>`).join('')}</div>` : ''}</div>
-        <div class="ex"><div class="between"><div class="en grow">${esc(w.ex)}</div>${sayBtn(w.ex)}</div><div class="fa">${esc(w.exfa)}</div></div>
+        <div class="ex"><div class="between"><div class="en grow">${pic(w, false)} ${hlEx(w)}</div>${sayBtn(w.ex)}</div><div class="fa">${esc(w.exfa)}</div></div>
         <button class="btn" id="gotit" style="margin-top:18px">Got it →</button>`;
       say(w.w, { quiet: true });
       const p = body.querySelector('.pic3d'); if (p) tilt(p);
@@ -478,12 +490,26 @@ function grammarTeach(g, review) {
     }
   };
 }
+// grammar in colour: the forms being taught get their own colour wherever they appear (rules, examples, drills)
+const GKC = 6;
+function gramKeys(g) {
+  if (g._keys) return g._keys;
+  const t = new Set(); const after = g.t.includes(':') ? g.t.split(':').slice(1).join(':') : '';
+  after.split(/[,/…]| or | and /).map(x => x.replace(/[.?!…]/g, '').trim()).filter(x => x && x.length < 22).forEach(x => t.add(x.toLowerCase()));
+  g.d.forEach(d => { const x = String(d[1]).replace(/[.?!]/g, '').trim(); if (x && x !== '—' && x.length < 22) t.add(x.toLowerCase()); });
+  return (g._keys = [...t].filter(x => /[a-z]/.test(x)).sort((a, b) => b.length - a.length));
+}
+function gColor(g, html) {
+  const keys = gramKeys(g); if (!keys.length) return html;
+  const re = new RegExp('(^|[^A-Za-z])(' + keys.map(k => esc(k).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![A-Za-z])', 'gi');
+  return html.replace(re, (m, p, k) => p + '<b class="gk gk' + (keys.indexOf(k.toLowerCase().replace(/&#39;/g, "'")) % GKC + GKC) % GKC + '">' + k + '</b>');
+}
 function gramHTML(g, review) {
   return `<div class="between"><span class="eyebrow">${review ? 'grammar review' : 'grammar'}</span>${lvChip(g.lv)}</div>
     <div class="h2" style="margin-top:6px">${esc(g.t)}</div><div class="fa" style="color:var(--dim);font-size:15px">${esc(g.fa)}</div>
-    <div class="card">${g.r.map(r => `<div class="rule"><div style="font-weight:600">${esc(r[0])}</div><div class="fa" style="color:var(--dim);font-size:14px;margin-top:3px">${esc(r[1])}</div></div>`).join('')}</div>
+    <div class="card">${g.r.map((r, i) => `<div class="rule rc rc${i % 4}"><div style="font-weight:600">${gColor(g, esc(r[0]))}</div><div class="fa" style="color:var(--dim);font-size:14px;margin-top:3px">${esc(r[1])}</div></div>`).join('')}</div>
     <div class="eyebrow" style="margin:14px 4px 4px">examples</div>
-    <div class="card">${(review ? g.ex.slice(0, 3) : g.ex).map(x => `<div class="list-item"><div class="grow"><div style="font-weight:600">${esc(x[0])}</div><div class="fa" style="color:var(--dim);font-size:14px">${esc(x[1])}</div></div>${sayBtn(x[0])}</div>`).join('')}</div>
+    <div class="card">${(review ? g.ex.slice(0, 3) : g.ex).map((x, i) => `<div class="list-item exr exr${i % 2}"><div class="grow"><div style="font-weight:600">${gColor(g, esc(x[0]))}</div><div class="fa" style="color:var(--dim);font-size:14px">${esc(x[1])}</div></div>${sayBtn(x[0])}</div>`).join('')}</div>
     <div class="tip">${lab('tip for Persian speakers', 'نکته برای فارسی‌زبان‌ها', 'color:var(--gold)')}<div class="fa" style="margin-top:4px;font-size:15px">${esc(g.tip)}</div></div>`;
 }
 function grammarDrill(g, k) {
@@ -495,7 +521,7 @@ function grammarDrill(g, k) {
       mcq(body, d.slice(1), d[1], (ok, cor) => { if (d[0].includes('___')) say(d[0].replace('___', cor === '—' ? '' : cor).replace(/\s+/g, ' '), { quiet: true }); else say(cor, { quiet: true }); done(ok, cor); });
     },
     grade(ok) { const s = ST.gram[g.id] || (ST.gram[g.id] = { n: 0, ok: 0 }); s.n++; if (ok) s.ok++; if (!ok) missNote('g:' + g.id + ':' + k, false); save(); },
-    feedback: () => esc(d[0].includes('___') ? d[0].replace('___', d[1]) : d[1]), remake: () => grammarDrill(g, k)
+    feedback: () => d[0].includes('___') ? esc(d[0]).replace('___', '<b class="gk gk0">' + esc(d[1]) + '</b>') : '<b class="gk gk0">' + esc(d[1]) + '</b>', remake: () => grammarDrill(g, k)
   };
 }
 function dialogueCard(u, blind) {
@@ -564,8 +590,17 @@ function startSession(items, title, onEnd) {
   SESSION_ID = Date.now();
   sess = { items, i: 0, ok: 0, n: 0, title, onEnd, retries: 0 };
   const r = RUN(); r.style.display = 'flex'; document.body.style.overflow = 'hidden';
-  r.innerHTML = `<div class="runtop"><button class="icob" id="rx">✕</button><button class="icob" id="rprev" aria-label="previous card">‹</button><div class="runbar"><div class="bar"><i id="rbar" style="width:0"></i></div></div><span class="xs" id="rcount"></span></div><div class="runbody" id="rbody"></div>`;
+  r.innerHTML = `<div class="runtop"><button class="icob" id="rx">✕</button><button class="icob" id="rprev" aria-label="previous card">‹</button><div class="runbar"><div class="bar"><i id="rbar" style="width:0"></i></div></div><span class="xs" id="rcount"></span><button class="chip blue" id="rspeed" aria-label="speaking speed">🔊 ${curRate().toFixed(1)}×</button><button class="chip mint" id="rknow" title="I know this word: never review it again">✓ I know it</button></div><div class="rsp hide" id="rsp">${RATES.map(x => `<button data-rr="${x}" class="${Math.abs(curRate() - x) < .01 ? 'on' : ''}">${x.toFixed(1)}×</button>`).join('')}</div><div class="runbody" id="rbody"></div>`;
   $('#rx').onclick = () => { if (confirm('Stop this session? Your progress so far is saved.')) endSession(true); };
+  $('#rspeed').onclick = () => $('#rsp').classList.toggle('hide');   // speaking speed, on every question
+  r.querySelectorAll('[data-rr]').forEach(b => b.onclick = () => { ST.rate = +b.dataset.rr; save(); r.querySelectorAll('[data-rr]').forEach(x => x.classList.toggle('on', x === b)); $('#rspeed').textContent = '🔊 ' + curRate().toFixed(1) + '×'; $('#rsp').classList.add('hide'); const sb = $('#rbody [data-say]'); if (sb) sb.click(); });
+  $('#rknow').onclick = () => {
+    const it = sess && sess.items[sess.i]; if (!it || !it.w) return;
+    const w = it.w, before = sess.items.slice(); markKnown(w.id); stopSpeech();
+    sess.items = sess.items.filter((x, j) => j <= sess.i || !(x.w && x.w.id === w.id));
+    toastUndo('“' + w.w + '” marked as known. It will not be reviewed again.', () => { unmarkKnown(w.id); });
+    sess.i++; step();
+  };
   $('#rprev').onclick = () => { if (!sess || sess.i <= 0) return; stopSpeech(); DLG_RUN++; sess.i--; sess.items[sess.i].seen = true; step(); };   // back to the previous card, to read it again (not graded again)
   step();
 }
@@ -577,6 +612,7 @@ function step() {
   $('#rbar').style.width = (100 * sess.i / sess.items.length) + '%';
   $('#rcount').textContent = (sess.i + 1) + '/' + sess.items.length;
   $('#rprev').style.visibility = sess.i > 0 ? 'visible' : 'hidden';
+  $('#rknow').style.display = it.w ? '' : 'none'; $('#rsp').classList.add('hide');
   pickMix();
   try { it.render(body, (ok, cor) => answered(it, ok, cor)); prefetchIn(body); }
   catch (e) { logErr('render ' + it.key + ' ' + e.message); sess.i++; step(); }
@@ -627,7 +663,8 @@ function missItems(limit) {
   Object.entries(ST.miss).sort((a, b) => a[1].t - b[1].t).forEach(([k]) => {
     if (out.length >= limit) return;
     const p = k.split(':');
-    if (p[0] === 'w' && WMAP[p[1]]) out.push(wordEx(WMAP[p[1]]));
+    if (p[0] === 'w' && WMAP[p[1]] && knownForever(p[1])) delete ST.miss[k];
+    else if (p[0] === 'w' && WMAP[p[1]]) out.push(wordEx(WMAP[p[1]]));
     else if (p[0] === 'g' && GMAP[p[1]] && GMAP[p[1]].d[+p[2]]) out.push(grammarDrill(GMAP[p[1]], +p[2]));
     else if (p[0] === 'l' && dlgUnit(p[1])) out.push(dlgQuestion(dlgUnit(p[1]), +p[2]));
     else if (p[0] === 'p') { const P = LISTEN.find(x => x.id === p[1]); if (P) out.push(passageQ(P, +p[2])); }
@@ -641,21 +678,24 @@ function buildDaily() {
   missItems(12).forEach(x => { items.push(x); if (x.w) usedW.add(x.w.id); });
   // 2. due reviews
   const due = dueList().filter(w => !usedW.has(w.id)).slice(0, 12);
-  due.slice(0, 6).forEach(w => { items.push(wordEx(w)); usedW.add(w.id); });
   // 3. new words in road order (across lessons): intro card, then a check after every two
   const L = nextLesson(), fresh = freshWords(Math.min(sessionNew(), Math.max(0, dayTarget() - newToday())));
   fresh.forEach(w => { prefetch(w.w); prefetch(w.ex); });
-  const half = Math.ceil(fresh.length / 2);
-  const intro = (ws, off) => { ws.forEach((w, i) => { items.push(introCard(w, L, off + i, fresh.length)); if (i % 2 === 1) { items.push(wordEx(ws[i - 1], 'en2fa')); items.push(wordEx(w, 'listen')); } }); if (ws.length % 2) items.push(wordEx(ws[ws.length - 1], 'en2fa')); };
-  intro(fresh.slice(0, half), 0);
+  // each new word is taught, then checked twice in two different random forms, at random places at least two cards later,
+  // mixed with today's reviews, so the learner cannot predict which word is asked next
+  const seq = fresh.map((w, i) => introCard(w, L, i, fresh.length));
+  due.slice(0, 6).forEach(w => seq.splice(Math.floor(Math.random() * (seq.length + 1)), 0, wordEx(w)));
+  shuffle(fresh.flatMap(w => shuffle(['en2fa', 'fa2en', 'listen', ...(blankIn(w.ex, w.w) ? ['cloze', 'cloze'] : [])]).filter((k, j, a) => a.indexOf(k) === j).slice(0, 2).map(k => [w, k])))
+    .forEach(([w, k]) => { const at = seq.findIndex(x => x.kind === 'intro' && x.w === w) + 2 + Math.floor(Math.random() * 3); seq.splice(Math.min(seq.length, at + Math.floor(Math.random() * Math.max(1, seq.length - at + 1))), 0, wordEx(w, k)); });
+  const half = Math.ceil(seq.length / 2);
+  items.push(...seq.slice(0, half));
   // 4. grammar every day: the next rule on the path, or a review of the oldest learned rule
   const g = nextGrammar();
   if (g) { const seen = ST.gram[g.id] && ST.gram[g.id].t; items.push(grammarTeach(g, false)); pick([...g.d.keys()], 4).forEach(k => items.push(grammarDrill(g, k))); }
   else { const rv = gramReviewPool()[0]; if (rv) { items.push(grammarTeach(rv, true)); pick([...rv.d.keys()], 3).forEach(k => items.push(grammarDrill(rv, k))); } }
-  intro(fresh.slice(half), half);
-  // 5. remaining reviews, mixed with production practice of today's words
-  due.slice(6).forEach(w => items.push(wordEx(w)));
-  fresh.forEach(w => { if (blankIn(w.ex, w.w)) items.push(wordEx(w, 'cloze')); });
+  items.push(...seq.slice(half));
+  // 5. remaining reviews
+  shuffle(due.slice(6)).forEach(w => items.push(wordEx(w)));
   // 6. listening: every lesson finished today has its own conversation, heard first without the text, then 2 questions
   const fid = new Set(fresh.map(w => w.id));
   LESSONS.filter(L => L.words.some(id => fid.has(id)) && L.words.every(id => ST.cards[id] || fid.has(id))).map(lessonTalk).filter(t => t && !ST.dlg[t.id]).slice(0, 3)
@@ -663,12 +703,12 @@ function buildDaily() {
   return items;
 }
 function quickReview() {
-  const ws = seenWords(); if (!ws.length) return toast('Learn some words first');
+  const ws = seenWords().filter(w => !knownForever(w.id)); if (!ws.length) return toast('Learn some words first');
   const w8 = ws.slice().sort((a, b) => ((ST.cards[b.id].w || 0) - (ST.cards[b.id].c || 0) * .3) - ((ST.cards[a.id].w || 0) - (ST.cards[a.id].c || 0) * .3) || ST.cards[a.id].lt - ST.cards[b.id].lt);
   startSession(w8.slice(0, 20).map(w => wordEx(w, pick(['en2fa', 'fa2en', 'listen'], 1)[0])), 'Quick review');
 }
 function unitPractice(u) {
-  const ws = u.w.map((_, i) => WMAP[u.id + '-' + i]).filter(w => ST.cards[w.id]);
+  const ws = u.w.map((_, i) => WMAP[u.id + '-' + i]).filter(w => ST.cards[w.id] && !knownForever(w.id));
   if (ws.length < 4) return toast('Learn at least 4 words of this unit first');
   startSession(shuffle(ws).map(w => wordEx(w)), u.t);
 }
@@ -750,7 +790,7 @@ function vWords() {
     const u = UMAP[SUB];
     return `<button class="btn ghost sm inl" data-back>‹ All units</button><div class="row" style="margin-top:12px"><span style="font-size:36px">${u.i}</span><div class="grow"><div class="h2">${esc(u.t)}</div><div class="fa" style="color:var(--dim)">${esc(u.fa)}</div></div>${lvChip(u.lv)}</div>
     <button class="btn sm" data-upr="${u.id}" style="margin-top:12px">Practise this unit</button>
-    <div class="card">${u.w.map((_, i) => { const w = WMAP[u.id + '-' + i], c = ST.cards[w.id]; return `<div class="list-item">${pic(w)}<div class="grow"><div class="between"><b>${esc(w.w)}</b><span class="xs">${c ? (c.b >= 3 ? '<span class="done-mark">✓ known</span>' : 'learning') : 'new'}</span></div><div class="fa" style="color:var(--dim);font-size:14px">${esc(w.fa)}</div>${w.syn.length ? `<div class="xs">≈ ${esc(w.syn.join(', '))}</div>` : ''}<div class="xs" style="margin-top:2px">${esc(w.ex)}</div></div>${sayBtn(w.w)}</div>`; }).join('')}</div>`;
+    <div class="card">${u.w.map((_, i) => { const w = WMAP[u.id + '-' + i], c = ST.cards[w.id]; return `<div class="list-item">${pic(w)}<div class="grow"><div class="between"><b>${esc(w.w)}</b><span class="xs">${c ? (c.k ? `<button class="chip mint" data-unknow="${w.id}">✓ known for good · undo</button>` : c.b >= 3 ? '<span class="done-mark">✓ known</span>' : 'learning') : 'new'}</span></div><div class="fa" style="color:var(--dim);font-size:14px">${esc(w.fa)}</div>${w.syn.length ? `<div class="xs">≈ ${esc(w.syn.join(', '))}</div>` : ''}<div class="xs" style="margin-top:2px">${esc(w.ex)}</div></div>${sayBtn(w.w)}</div>`; }).join('')}</div>`;
   }
   return `${lab('vocabulary', 'واژگان')}<div class="h1">Words</div>
   <div class="row"><div class="stat"><b>${seenWords().length}</b><span class="xs">met</span></div><div class="stat"><b>${WORDS.filter(w => known(w.id)).length}</b><span class="xs">known</span></div><div class="stat"><b>${dueList().length}</b><span class="xs">due now</span></div></div>
@@ -894,6 +934,7 @@ function bind(a) {
   on('#qr', quickReview);
   on('#gl', () => { TAB = 'listen'; render(); });
   on('[data-back]', () => { SUB = null; stopSpeech(); DLG_RUN++; render(); window.scrollTo(0, 0); });
+  on('[data-unknow]', b => { unmarkKnown(b.dataset.unknow); toast('It will be reviewed again'); render(); });
   on('[data-unit]', b => { SUB = b.dataset.unit; render(); window.scrollTo(0, 0); });
   on('[data-upr]', b => unitPractice(UMAP[b.dataset.upr]));
   on('[data-gram]', b => { SUB = b.dataset.gram; render(); window.scrollTo(0, 0); });

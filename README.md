@@ -6,7 +6,7 @@ home screen from Safari. Built on the model of the Dutch app (`abolfazlfarsad71/
 
 **Open:** https://abolfazlfarsad71.github.io/English-Language-App/
 
-## What is inside (build b17)
+## What is inside (build b18)
 - **Road to C2:** 297 topic units (A1 28 · A2 40 · B1 63 · B2 90 · C1 56 · C2 20), split into 8-word lessons; idiom units alternate with topic units.
 - **5,680 words and phrases** (about 920 idioms) with Farsi meaning, English synonyms, a practical example sentence + Farsi translation, and an
   emoji only where it shows exactly the word (others get a clean letter tile). New-word card floats in 3-D.
@@ -38,6 +38,7 @@ ground), one review mode (quick review) instead of several, and the separate Spe
   on any phone, once per phone.
 
 ## Updates reach the phones automatically
+One step: `node release.cjs "what changed"` (build, local copy in `../04. Current version`, commit, push).
 Bump `const BUILD = '<d mon> · bNN'` in `src/app.js` (higher `bNN`), run `node build.mjs`, commit `index.html`.
 GitHub Pages deploys in a few minutes; the app checks its own file on every open and shows
 "New version ready → Update". Progress stays on the phone under keys that never change:
@@ -66,6 +67,11 @@ All texts, dialogues and exercises are original, written for this app. The refer
 copyrighted and are **not** copied into this public repository.
 
 ## Change log
+- **b18 (22 nov)** — "✓ I know it" in the session bar (the word is never reviewed again; undo in the toast or on the unit
+  page); checks after teaching come at random places and in random forms (2 different checks per word, ≥2 cards after it);
+  pictures on more question types, the word highlighted in its example, colour halo by part of speech; speed chip on every
+  question; grammar in colour (taught forms coloured in rules, examples and drills); `node release.cjs "message"` builds,
+  replaces `../04. Current version` and pushes.
 - **b17 (17 nov)** — every word clip checked with speech recognition (whisper.cpp base.en, `../02. Audio/asrcheck2.cjs`,
   `asrsuspect.cjs`, `score.cjs`, `retry.cjs`): failed clips re-recorded with new takes and re-checked; clips that still fail are left
   out of that voice (`asr/drop-<voice>.json`) and the app plays the word in another voice of the same gender. Ryan removed
